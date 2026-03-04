@@ -1,3 +1,41 @@
+#' Verifier la disponibilite de Python et des modules requis
+#'
+#' Effectue une verification AVANT de charger reticulate, via un appel
+#' systeme direct a Python. Cela evite le crash fatal de la session R
+#' cause par reticulate + PyTorch sur certaines configurations Windows.
+#'
+#' @return TRUE si Python + torch + numpy sont disponibles, FALSE sinon
+#' @export
+verifier_python <- function() {
+  # Chercher un executable Python
+  py <- Sys.which("python3")
+  if (py == "") py <- Sys.which("python")
+  if (py == "") {
+    message("  [PYTHON] Aucun executable Python trouve dans le PATH.")
+    return(FALSE)
+  }
+
+  # Tester torch + numpy via appel systeme (pas reticulate)
+  test_cmd <- sprintf(
+    '%s -c "import torch; import numpy; print(torch.__version__)"',
+    py
+  )
+  result <- tryCatch(
+    system(test_cmd, intern = TRUE, ignore.stderr = TRUE),
+    error = function(e) NULL,
+    warning = function(w) NULL
+  )
+
+  if (is.null(result) || length(result) == 0) {
+    message("  [PYTHON] torch ou numpy non disponible dans : ", py)
+    message("  Installez avec : pip install torch numpy")
+    return(FALSE)
+  }
+
+  message(sprintf("  [PYTHON] OK - PyTorch %s (%s)", result[1], py))
+  return(TRUE)
+}
+
 #' Configurer l'environnement Python pour MAESTRO
 #'
 #' Recherche un environnement conda `maestro` ou utilise le Python systeme.

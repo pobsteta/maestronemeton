@@ -282,32 +282,43 @@ resultats <- NULL
 raster_carte <- NULL
 
 if (lancer_inference) {
-  tryCatch({
-    message("\n=== Telechargement du modele ===")
-    fichiers_modele <- telecharger_modele("IGNF/MAESTRO_FLAIR-HUB_base")
+  # Verification AVANT de charger reticulate (evite crash fatal Windows)
+  message("\n=== Verification Python (pre-reticulate) ===")
+  python_ok <- verifier_python()
 
-    message("\n=== Configuration Python ===")
-    configurer_python()
-
-    message("\n=== Extraction des patches ===")
-    patches_data <- extraire_patches_raster(image_finale, grille, patch_size)
-
-    message("\n=== Inference MAESTRO ===")
-    predictions <- executer_inference(
-      patches_data, fichiers_modele,
-      n_classes = 13L, n_bands = n_bands,
-      utiliser_gpu = utiliser_gpu
-    )
-
-    message("\n=== Assemblage des resultats ===")
-    resultats <- assembler_resultats(grille, predictions, dossier_sortie = output_dir)
-    raster_carte <- creer_carte_raster(resultats, resolution, output_dir)
-    inference_ok <- TRUE
-
-  }, error = function(e) {
-    message("\n[INFO] Inference echouee : ", e$message)
+  if (!python_ok) {
+    message("\n[ATTENTION] Python/PyTorch non disponible.")
     message("  Le rapport sera genere sans la carte des essences.")
-  })
+    message("  Pour installer : conda create -n maestro python=3.10 && conda activate maestro")
+    message("                   pip install torch numpy safetensors")
+  } else {
+    tryCatch({
+      message("\n=== Telechargement du modele ===")
+      fichiers_modele <- telecharger_modele("IGNF/MAESTRO_FLAIR-HUB_base")
+
+      message("\n=== Configuration Python ===")
+      configurer_python()
+
+      message("\n=== Extraction des patches ===")
+      patches_data <- extraire_patches_raster(image_finale, grille, patch_size)
+
+      message("\n=== Inference MAESTRO ===")
+      predictions <- executer_inference(
+        patches_data, fichiers_modele,
+        n_classes = 13L, n_bands = n_bands,
+        utiliser_gpu = utiliser_gpu
+      )
+
+      message("\n=== Assemblage des resultats ===")
+      resultats <- assembler_resultats(grille, predictions, dossier_sortie = output_dir)
+      raster_carte <- creer_carte_raster(resultats, resolution, output_dir)
+      inference_ok <- TRUE
+
+    }, error = function(e) {
+      message("\n[INFO] Inference echouee : ", e$message)
+      message("  Le rapport sera genere sans la carte des essences.")
+    })
+  }
 } else {
   message("\n=== Inference non demandee ===")
   message("  Pour lancer l'inference, utilisez le flag --inference")
