@@ -6,8 +6,8 @@
 # =============================================================================
 #
 # Utilisation :
-#   Rscript maestro_essences.R --aoi aoi.gpkg
-#   Rscript maestro_essences.R --aoi aoi.gpkg --millesime_ortho 2023 --millesime_irc 2023
+#   Rscript maestro_essences.R --aoi data/aoi.gpkg
+#   Rscript maestro_essences.R --aoi data/aoi.gpkg --millesime_ortho 2023 --millesime_irc 2023
 #
 # Les donnees (ortho RVB, ortho IRC, MNT 1m) sont telechargees automatiquement
 # depuis la Geoplateforme IGN via WMS-R.
@@ -103,9 +103,9 @@ ESSENCES <- data.frame(
 
 # --- Arguments en ligne de commande ---
 option_list <- list(
-  make_option(c("-a", "--aoi"), type = "character", default = "aoi.gpkg",
+  make_option(c("-a", "--aoi"), type = "character", default = "data/aoi.gpkg",
               help = "Chemin vers le fichier GeoPackage de la zone d'interet [default: %default]"),
-  make_option(c("-o", "--output"), type = "character", default = "resultats",
+  make_option(c("-o", "--output"), type = "character", default = "outputs",
               help = "Repertoire de sortie [default: %default]"),
   make_option(c("-m", "--model"), type = "character",
               default = "IGNF/MAESTRO_FLAIR-HUB_base",

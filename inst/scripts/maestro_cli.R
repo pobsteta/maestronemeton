@@ -4,8 +4,8 @@
 # Interface en ligne de commande pour le package maestro
 #
 # Utilisation :
-#   Rscript maestro_cli.R --aoi aoi.gpkg
-#   Rscript maestro_cli.R --aoi aoi.gpkg --millesime_ortho 2023
+#   Rscript maestro_cli.R --aoi data/aoi.gpkg
+#   Rscript maestro_cli.R --aoi data/aoi.gpkg --millesime_ortho 2023
 # =============================================================================
 
 if (!requireNamespace("optparse", quietly = TRUE)) {
@@ -20,9 +20,9 @@ library(optparse)
 library(maestro)
 
 option_list <- list(
-  make_option(c("-a", "--aoi"), type = "character", default = "aoi.gpkg",
+  make_option(c("-a", "--aoi"), type = "character", default = "data/aoi.gpkg",
               help = "Chemin vers le fichier GeoPackage de la zone d'interet [default: %default]"),
-  make_option(c("-o", "--output"), type = "character", default = "resultats",
+  make_option(c("-o", "--output"), type = "character", default = "outputs",
               help = "Repertoire de sortie [default: %default]"),
   make_option(c("-m", "--model"), type = "character",
               default = "IGNF/MAESTRO_FLAIR-HUB_base",

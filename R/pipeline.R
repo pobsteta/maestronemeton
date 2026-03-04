@@ -5,7 +5,7 @@
 #' decoupe en patches, execute l'inference et exporte les resultats.
 #'
 #' @param aoi_path Chemin vers le fichier GeoPackage de la zone d'interet
-#' @param output_dir Repertoire de sortie (defaut: `"resultats"`)
+#' @param output_dir Repertoire de sortie (defaut: `"outputs"`)
 #' @param model_id Identifiant du modele Hugging Face
 #'   (defaut: `"IGNF/MAESTRO_FLAIR-HUB_base"`)
 #' @param millesime_ortho Millesime de l'ortho RVB (`NULL` = plus recent)
@@ -19,15 +19,15 @@
 #' @examples
 #' \dontrun{
 #' # Millesime par defaut
-#' maestro_pipeline("aoi.gpkg")
+#' maestro_pipeline("data/aoi.gpkg")
 #'
 #' # Millesime specifique
-#' maestro_pipeline("aoi.gpkg",
+#' maestro_pipeline("data/aoi.gpkg",
 #'                   millesime_ortho = 2023,
 #'                   millesime_irc = 2023)
 #' }
-maestro_pipeline <- function(aoi_path = "aoi.gpkg",
-                              output_dir = "resultats",
+maestro_pipeline <- function(aoi_path = "data/aoi.gpkg",
+                              output_dir = "outputs",
                               model_id = "IGNF/MAESTRO_FLAIR-HUB_base",
                               millesime_ortho = NULL,
                               millesime_irc = NULL,

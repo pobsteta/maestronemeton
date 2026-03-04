@@ -7,5 +7,6 @@
 ^maestro_essences\.R$
 ^maestro_inference\.py$
 ^creer_aoi_exemple\.R$
-^aoi\.gpkg$
+^data$
+^outputs$
 ^resultats$

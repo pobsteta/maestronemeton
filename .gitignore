@@ -7,8 +7,11 @@
 .Ruserdata
 
 # Output
+outputs/
 resultats/
-aoi.gpkg
+
+# Data (user-provided)
+data/aoi.gpkg
 
 # OS
 .DS_Store

@@ -37,10 +37,11 @@ aoi <- st_sf(
   geometry = st_sfc(poly, crs = 2154)
 )
 
-# Exporter en GeoPackage
-st_write(aoi, "aoi.gpkg", delete_dsn = TRUE, quiet = TRUE)
+# Exporter en GeoPackage dans le repertoire data/
+dir.create("data", showWarnings = FALSE, recursive = TRUE)
+st_write(aoi, "data/aoi.gpkg", delete_dsn = TRUE, quiet = TRUE)
 
-cat("Fichier aoi.gpkg cree avec succes.\n")
+cat("Fichier data/aoi.gpkg cree avec succes.\n")
 cat(sprintf("  Etendue (Lambert-93) : [%d, %d] - [%d, %d]\n", xmin, ymin, xmax, ymax))
 cat(sprintf("  Surface : %.2f km2\n", as.numeric(st_area(aoi)) / 1e6))
 cat("  CRS : EPSG:2154 (RGF93 / Lambert-93)\n")

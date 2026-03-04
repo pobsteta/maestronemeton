@@ -36,15 +36,15 @@ pip install torch numpy safetensors
 library(maestro)
 
 # Pipeline complet en une ligne
-maestro_pipeline("aoi.gpkg",
+maestro_pipeline("data/aoi.gpkg",
                   millesime_ortho = 2023,
                   millesime_irc = 2023)
 
 # Ou etape par etape
-aoi   <- load_aoi("aoi.gpkg")
-ortho <- download_ortho_for_aoi(aoi, "resultats/", millesime_ortho = 2023)
+aoi   <- load_aoi("data/aoi.gpkg")
+ortho <- download_ortho_for_aoi(aoi, "outputs/", millesime_ortho = 2023)
 rgbi  <- combine_rvb_irc(ortho$rvb, ortho$irc)
-mnt   <- download_mnt_for_aoi(aoi, "resultats/", rgbi = rgbi)
+mnt   <- download_mnt_for_aoi(aoi, "outputs/", rgbi = rgbi)
 image <- combine_rgbi_mnt(rgbi, mnt$mnt)
 # ... inference, export
 ```
@@ -52,8 +52,8 @@ image <- combine_rgbi_mnt(rgbi, mnt$mnt)
 ### En ligne de commande
 
 ```bash
-Rscript inst/scripts/maestro_cli.R --aoi aoi.gpkg
-Rscript inst/scripts/maestro_cli.R --aoi aoi.gpkg \
+Rscript inst/scripts/maestro_cli.R --aoi data/aoi.gpkg
+Rscript inst/scripts/maestro_cli.R --aoi data/aoi.gpkg \
   --millesime_ortho 2023 --millesime_irc 2023 --gpu
 ```
 
@@ -73,7 +73,7 @@ Rscript inst/scripts/test_pipeline_aoi.R --millesime 2023
 ## Pipeline
 
 ```
-aoi.gpkg
+data/aoi.gpkg
    |
    v
 Telechargement IGN (WMS-R Geoplateforme)
@@ -91,7 +91,7 @@ Decoupage en patches 250x250 px (50m x 50m)
 Inference MAESTRO (ViT, 13 classes PureForest)
    |
    v
-Resultats
+outputs/
    |-- essences_forestieres.gpkg (carte vectorielle)
    |-- essences_forestieres.tif  (carte raster)
    |-- statistiques_essences.csv
@@ -104,6 +104,7 @@ maestro_nemeton/
   DESCRIPTION
   NAMESPACE
   LICENSE
+  data/                   # Placer aoi.gpkg ici
   R/
     aoi.R            # load_aoi()
     combine.R        # combine_rvb_irc(), combine_rgbi_mnt()
@@ -149,8 +150,8 @@ maestro_nemeton/
 
 | Option | Description | Defaut |
 |--------|-------------|--------|
-| `--aoi` | Fichier GeoPackage | `aoi.gpkg` |
-| `--output` | Repertoire de sortie | `resultats/` |
+| `--aoi` | Fichier GeoPackage | `data/aoi.gpkg` |
+| `--output` | Repertoire de sortie | `outputs/` |
 | `--model` | Modele Hugging Face | `IGNF/MAESTRO_FLAIR-HUB_base` |
 | `--millesime_ortho` | Annee ortho RVB | `NULL` (plus recent) |
 | `--millesime_irc` | Annee ortho IRC | `NULL` (plus recent) |
