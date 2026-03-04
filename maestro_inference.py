@@ -4,12 +4,12 @@ Module Python d'inference pour le modele MAESTRO de l'IGNF.
 Appele depuis R via reticulate.
 
 Le modele MAESTRO est un Masked Autoencoder (MAE) base sur un Vision Transformer (ViT)
-pre-entraine sur des donnees d'observation de la Terre multimodales.
+pre-entraine sur des donnees d'observation de la Terre multimodales (aerien RGBI + MNT).
 
 Ce module fournit les fonctions pour :
   - Charger les poids pre-entraines depuis un fichier local (telecharge via hfhub)
   - Construire une tete de classification pour les essences forestieres
-  - Executer l'inference sur des patches d'images
+  - Executer l'inference sur des patches d'images multi-bandes
 """
 
 import torch
@@ -21,26 +21,26 @@ import json
 
 # Classes d'essences forestieres PureForest (13 classes)
 ESSENCES = [
-    "Chene decidue",
-    "Chene vert",
-    "Hetre",
-    "Chataignier",
-    "Pin maritime",
-    "Pin sylvestre",
-    "Pin laricio/noir",
-    "Pin d'Alep",
-    "Epicea",
-    "Sapin",
-    "Douglas",
-    "Meleze",
-    "Peuplier",
+    "Chene decidue",       # 0 - Quercus spp. (deciduous)
+    "Chene vert",          # 1 - Quercus ilex
+    "Hetre",               # 2 - Fagus sylvatica
+    "Chataignier",         # 3 - Castanea sativa
+    "Pin maritime",        # 4 - Pinus pinaster
+    "Pin sylvestre",       # 5 - Pinus sylvestris
+    "Pin laricio/noir",    # 6 - Pinus nigra
+    "Pin d'Alep",          # 7 - Pinus halepensis
+    "Epicea",              # 8 - Picea abies
+    "Sapin",               # 9 - Abies alba
+    "Douglas",             # 10 - Pseudotsuga menziesii
+    "Meleze",              # 11 - Larix spp.
+    "Peuplier",            # 12 - Populus spp.
 ]
 
 
 class PatchEmbed(nn.Module):
     """Projection des patches d'image en embeddings."""
 
-    def __init__(self, img_size=250, patch_size=16, in_channels=4, embed_dim=768):
+    def __init__(self, img_size=250, patch_size=16, in_channels=5, embed_dim=768):
         super().__init__()
         self.img_size = img_size
         self.patch_size = patch_size
@@ -60,7 +60,7 @@ class PatchEmbed(nn.Module):
 class MAEEncoder(nn.Module):
     """Encodeur Vision Transformer (ViT) style MAE."""
 
-    def __init__(self, img_size=250, patch_size=16, in_channels=4,
+    def __init__(self, img_size=250, patch_size=16, in_channels=5,
                  embed_dim=768, depth=12, num_heads=12, mlp_ratio=4.0):
         super().__init__()
 
@@ -105,9 +105,13 @@ class MAESTROClassifier(nn.Module):
     """
     Classificateur d'essences forestieres base sur MAESTRO.
     Utilise l'encodeur MAE/ViT avec une tete de classification.
+
+    Entree attendue : image multi-bandes (RGBI ou RGBI+MNT)
+      - 4 bandes : Rouge, Vert, Bleu, PIR (ortho aerienne 0.2m)
+      - 5 bandes : Rouge, Vert, Bleu, PIR, MNT (+ altitude RGE ALTI 1m)
     """
 
-    def __init__(self, img_size=250, patch_size=16, in_channels=4,
+    def __init__(self, img_size=250, patch_size=16, in_channels=5,
                  embed_dim=768, depth=12, num_heads=12, n_classes=13):
         super().__init__()
 
@@ -136,7 +140,7 @@ class MAESTROClassifier(nn.Module):
         return logits
 
 
-def charger_modele(chemin_poids, n_classes=13, device="cpu"):
+def charger_modele(chemin_poids, n_classes=13, device="cpu", in_channels=5):
     """
     Charge le modele MAESTRO avec les poids pre-entraines.
 
@@ -144,6 +148,7 @@ def charger_modele(chemin_poids, n_classes=13, device="cpu"):
         chemin_poids: Chemin vers le fichier de poids (.pt, .pth, .bin, .safetensors)
         n_classes: Nombre de classes de sortie (13 pour PureForest)
         device: 'cpu' ou 'cuda'
+        in_channels: Nombre de bandes d'entree (4=RGBI, 5=RGBI+MNT)
 
     Returns:
         Modele PyTorch en mode evaluation
@@ -160,7 +165,6 @@ def charger_modele(chemin_poids, n_classes=13, device="cpu"):
         depth = config.get("num_hidden_layers", config.get("depth", 12))
         num_heads = config.get("num_attention_heads", config.get("num_heads", 12))
         patch_size = config.get("patch_size", 16)
-        in_channels = config.get("num_channels", config.get("in_channels", 4))
         img_size = config.get("image_size", config.get("img_size", 250))
     else:
         # Configuration par defaut (ViT-Base)
@@ -168,8 +172,12 @@ def charger_modele(chemin_poids, n_classes=13, device="cpu"):
         depth = 12
         num_heads = 12
         patch_size = 16
-        in_channels = 4
         img_size = 250
+
+    print(f"  Architecture: ViT-Base (embed_dim={embed_dim}, depth={depth}, "
+          f"heads={num_heads}, patch={patch_size})")
+    print(f"  Entree: {in_channels} bandes, {img_size}x{img_size} px")
+    print(f"  Sortie: {n_classes} classes d'essences")
 
     # Creer le modele
     modele = MAESTROClassifier(
@@ -189,19 +197,20 @@ def charger_modele(chemin_poids, n_classes=13, device="cpu"):
             state_dict = load_file(str(chemin), device=str(device))
         except ImportError:
             raise ImportError(
-                "Le package 'safetensors' est requis pour charger les fichiers .safetensors. "
+                "Le package 'safetensors' est requis. "
                 "Installez-le avec : pip install safetensors"
             )
     else:
         state_dict = torch.load(str(chemin), map_location=device, weights_only=False)
 
     # Gerer les checkpoints qui encapsulent le state_dict
-    if "state_dict" in state_dict:
-        state_dict = state_dict["state_dict"]
-    elif "model" in state_dict:
-        state_dict = state_dict["model"]
-    elif "model_state_dict" in state_dict:
-        state_dict = state_dict["model_state_dict"]
+    if isinstance(state_dict, dict):
+        if "state_dict" in state_dict:
+            state_dict = state_dict["state_dict"]
+        elif "model" in state_dict:
+            state_dict = state_dict["model"]
+        elif "model_state_dict" in state_dict:
+            state_dict = state_dict["model_state_dict"]
 
     # Charger les poids (mode non strict pour gerer les differences d'architecture)
     missing, unexpected = modele.load_state_dict(state_dict, strict=False)
@@ -212,7 +221,8 @@ def charger_modele(chemin_poids, n_classes=13, device="cpu"):
 
     modele = modele.to(device)
     modele.eval()
-    print(f"  Modele charge sur {device} ({sum(p.numel() for p in modele.parameters()):,} parametres)")
+    n_params = sum(p.numel() for p in modele.parameters())
+    print(f"  Modele charge sur {device} ({n_params:,} parametres)")
 
     return modele
 
@@ -231,27 +241,37 @@ def predire_patch(modele, image_np, device="cpu"):
     """
     device = torch.device(device)
 
-    # Preparer l'image
     if isinstance(image_np, np.ndarray):
         img = torch.from_numpy(image_np.copy()).float()
     else:
         img = image_np.float()
 
     # Si (H, W, C) -> (C, H, W)
-    if img.dim() == 3 and img.shape[-1] <= 4:
+    if img.dim() == 3 and img.shape[-1] <= 5:
         img = img.permute(2, 0, 1)
 
-    # Ajouter la dimension batch
     if img.dim() == 3:
         img = img.unsqueeze(0)
 
-    # Normaliser [0, 255] -> [0, 1]
-    if img.max() > 1.0:
-        img = img / 255.0
+    # Normaliser les bandes optiques [0, 255] -> [0, 1]
+    # Le MNT (derniere bande) est normalise separement
+    n_bands = img.shape[1]
+    if n_bands >= 4:
+        # Bandes optiques (RGBI) : normalisation [0, 255] -> [0, 1]
+        if img[:, :4].max() > 1.0:
+            img[:, :4] = img[:, :4] / 255.0
+        # Bande MNT (si presente) : normalisation min-max par batch
+        if n_bands >= 5:
+            mnt = img[:, 4:5]
+            mnt_min = mnt.min()
+            mnt_max = mnt.max()
+            if mnt_max > mnt_min:
+                img[:, 4:5] = (mnt - mnt_min) / (mnt_max - mnt_min)
+            else:
+                img[:, 4:5] = 0.0
 
     img = img.to(device)
 
-    # Inference
     with torch.no_grad():
         logits = modele(img)
         probs = torch.softmax(logits, dim=1)
@@ -270,7 +290,7 @@ def predire_batch(modele, images_np, device="cpu"):
 
     Args:
         modele: Modele MAESTROClassifier
-        images_np: Array numpy (B, H, W, C) ou (B, C, H, W), valeurs 0-255
+        images_np: Array numpy (B, C, H, W), valeurs 0-255
         device: 'cpu' ou 'cuda'
 
     Returns:
@@ -281,14 +301,77 @@ def predire_batch(modele, images_np, device="cpu"):
     batch = torch.from_numpy(np.array(images_np).copy()).float()
 
     # Si (B, H, W, C) -> (B, C, H, W)
-    if batch.dim() == 4 and batch.shape[-1] <= 4:
+    if batch.dim() == 4 and batch.shape[-1] <= 5:
         batch = batch.permute(0, 3, 1, 2)
 
-    # Normaliser
-    if batch.max() > 1.0:
-        batch = batch / 255.0
+    # Normaliser bandes optiques
+    n_bands = batch.shape[1]
+    if n_bands >= 4 and batch[:, :4].max() > 1.0:
+        batch[:, :4] = batch[:, :4] / 255.0
+    if n_bands >= 5:
+        mnt = batch[:, 4:5]
+        mnt_min = mnt.min()
+        mnt_max = mnt.max()
+        if mnt_max > mnt_min:
+            batch[:, 4:5] = (mnt - mnt_min) / (mnt_max - mnt_min)
+        else:
+            batch[:, 4:5] = 0.0
 
     batch = batch.to(device)
+
+    with torch.no_grad():
+        logits = modele(batch)
+        preds = torch.argmax(logits, dim=1).cpu().numpy()
+
+    return preds.tolist()
+
+
+def predire_batch_from_values(modele, values_np, patch_h=250, patch_w=250,
+                               device="cpu"):
+    """
+    Predit les essences depuis des matrices de valeurs terra (H*W, C).
+
+    Cette fonction est appelee depuis R via reticulate. Les donnees arrivent
+    sous forme (B, H*W, C) depuis terra::values() et sont reorganisees
+    en (B, C, H, W) pour PyTorch.
+
+    Args:
+        modele: Modele MAESTROClassifier
+        values_np: Array numpy (B, H*W, C) depuis terra::values()
+        patch_h: Hauteur du patch en pixels
+        patch_w: Largeur du patch en pixels
+        device: 'cpu' ou 'cuda'
+
+    Returns:
+        Liste de predictions (codes de classes)
+    """
+    device_t = torch.device(device)
+
+    arr = np.array(values_np, dtype=np.float32)
+
+    # Reshape (B, H*W, C) -> (B, H, W, C) -> (B, C, H, W)
+    B = arr.shape[0]
+    C = arr.shape[-1]
+    arr = arr.reshape(B, patch_h, patch_w, C)
+    arr = np.transpose(arr, (0, 3, 1, 2))  # (B, C, H, W)
+
+    batch = torch.from_numpy(arr)
+
+    # Normaliser bandes optiques (RGBI) [0, 255] -> [0, 1]
+    if C >= 4 and batch[:, :4].max() > 1.0:
+        batch[:, :4] = batch[:, :4] / 255.0
+
+    # Normaliser MNT (bande 5) en min-max
+    if C >= 5:
+        mnt = batch[:, 4:5]
+        mnt_min = mnt.min()
+        mnt_max = mnt.max()
+        if mnt_max > mnt_min:
+            batch[:, 4:5] = (mnt - mnt_min) / (mnt_max - mnt_min)
+        else:
+            batch[:, 4:5] = 0.0
+
+    batch = batch.to(device_t)
 
     with torch.no_grad():
         logits = modele(batch)
