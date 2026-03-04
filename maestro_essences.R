@@ -789,6 +789,9 @@ configurer_python <- function(envname = "maestro") {
   }
   library(reticulate)
 
+  # Eviter le conflit OpenMP sur Windows (torch + numpy livrent chacun libiomp5md.dll)
+  Sys.setenv(KMP_DUPLICATE_LIB_OK = "TRUE")
+
   use_condaenv(envname, required = TRUE)
   message("Environnement conda configure: ", envname)
 
