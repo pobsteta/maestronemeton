@@ -1,0 +1,11 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.git$
+^\.gitignore$
+^LICENSE\.md$
+^README\.Rmd$
+^maestro_essences\.R$
+^maestro_inference\.py$
+^creer_aoi_exemple\.R$
+^aoi\.gpkg$
+^resultats$

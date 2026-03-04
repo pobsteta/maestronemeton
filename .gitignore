@@ -1,0 +1,15 @@
+# R package build
+*.tar.gz
+*.Rcheck/
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+
+# Output
+resultats/
+aoi.gpkg
+
+# OS
+.DS_Store
+Thumbs.db

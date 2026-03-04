@@ -1,0 +1,29 @@
+Package: maestro
+Title: Forest Species Recognition Using MAESTRO Model and IGN Data
+Version: 0.1.0
+Authors@R:
+    person("Pierre", "Obsteta", role = c("aut", "cre"),
+           email = "pierre.obsteta@example.com")
+Description: Automatic recognition of forest tree species from an area of
+    interest (AOI) using the MAESTRO model from IGNF (Hugging Face). Downloads
+    orthophotos (RGB, IRC) and DTM data from the IGN Geoplateforme via WMS-R,
+    combines them into a multi-band image (R, G, B, NIR, DTM), and runs
+    inference with a Vision Transformer (ViT/MAE) to classify 13 PureForest
+    species.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends:
+    R (>= 4.1)
+Imports:
+    sf,
+    terra,
+    curl,
+    fs,
+    jsonlite,
+    reticulate
+Suggests:
+    hfhub,
+    optparse,
+    testthat (>= 3.0.0)
