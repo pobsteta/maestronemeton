@@ -1,4 +1,9 @@
 #!/usr/bin/env Rscript
+# --- Fix OpenMP avant tout chargement de package ---
+# torch et numpy livrent chacun libiomp5md.dll sur Windows ;
+# sans cette variable le process crash (OMP Error #15).
+Sys.setenv(KMP_DUPLICATE_LIB_OK = "TRUE")
+
 # =============================================================================
 # maestro_essences.R
 # Reconnaissance des essences forestieres a partir d'une zone d'interet (AOI)

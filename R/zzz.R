@@ -15,5 +15,9 @@
 NULL
 
 .onLoad <- function(libname, pkgname) {
-  # Nothing special needed at load time
+  # Eviter le crash OpenMP sur Windows : torch et numpy livrent chacun
+
+  # libiomp5md.dll, le conflit tue le process si la variable n'est pas
+  # positionnee AVANT le chargement des DLL.
+  Sys.setenv(KMP_DUPLICATE_LIB_OK = "TRUE")
 }
