@@ -77,7 +77,7 @@ message("\n========================================================")
 message(" TEST DU PIPELINE MAESTRO (package)")
 message("========================================================\n")
 
-dossier_test <- file.path(tempdir(), "maestro_test")
+dossier_test <- "outputs"
 dir.create(dossier_test, showWarnings = FALSE, recursive = TRUE)
 message(sprintf("Repertoire de test : %s", dossier_test))
 
@@ -105,7 +105,9 @@ aoi <- st_sf(
   geometry = st_sfc(poly, crs = 2154)
 )
 
-aoi_path <- file.path(dossier_test, "aoi_test.gpkg")
+aoi_dir <- "data"
+dir.create(aoi_dir, showWarnings = FALSE, recursive = TRUE)
+aoi_path <- file.path(aoi_dir, "aoi.gpkg")
 st_write(aoi, aoi_path, delete_dsn = TRUE, quiet = TRUE)
 
 # =============================================================================
