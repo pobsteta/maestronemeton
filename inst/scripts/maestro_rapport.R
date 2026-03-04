@@ -214,7 +214,8 @@ p_rvb <- ggplot(df_rvb, aes(x = x, y = y, fill = hex)) +
   scale_fill_identity() +
   geom_sf(data = aoi, fill = NA, color = "red", linewidth = 0.6, inherit.aes = FALSE) +
   coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
-           ylim = c(bbox["ymin"], bbox["ymax"]), crs = 2154) +
+           ylim = c(bbox["ymin"], bbox["ymax"]),
+           crs = sf::st_crs(2154), default_crs = sf::st_crs(2154)) +
   labs(title = "Orthophoto RVB",
        subtitle = sprintf("%.1f m | %d x %d px",
                           res(ortho$rvb)[1], ncol(ortho$rvb), nrow(ortho$rvb))) +
@@ -230,7 +231,8 @@ p_irc <- ggplot(df_irc, aes(x = x, y = y, fill = hex)) +
   scale_fill_identity() +
   geom_sf(data = aoi, fill = NA, color = "yellow", linewidth = 0.6, inherit.aes = FALSE) +
   coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
-           ylim = c(bbox["ymin"], bbox["ymax"]), crs = 2154) +
+           ylim = c(bbox["ymin"], bbox["ymax"]),
+           crs = sf::st_crs(2154), default_crs = sf::st_crs(2154)) +
   labs(title = "Infrarouge couleur (IRC)",
        subtitle = sprintf("%.1f m | %d x %d px",
                           res(ortho$irc)[1], ncol(ortho$irc), nrow(ortho$irc))) +
@@ -249,7 +251,8 @@ p_mnt <- ggplot(df_mnt, aes(x = x, y = y, fill = val)) +
                        colours = terrain.colors(20),
                        na.value = "transparent") +
   coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
-           ylim = c(bbox["ymin"], bbox["ymax"]), crs = 2154) +
+           ylim = c(bbox["ymin"], bbox["ymax"]),
+           crs = sf::st_crs(2154), default_crs = sf::st_crs(2154)) +
   labs(title = "Modele Numerique de Terrain",
        subtitle = sprintf("%.0f - %.0f m",
                           min(df_mnt$val, na.rm = TRUE),
@@ -273,7 +276,8 @@ p_ndvi <- ggplot(df_ndvi, aes(x = x, y = y, fill = val)) +
     limits = c(-0.2, 1), oob = scales::squish, na.value = "transparent"
   ) +
   coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
-           ylim = c(bbox["ymin"], bbox["ymax"]), crs = 2154) +
+           ylim = c(bbox["ymin"], bbox["ymax"]),
+           crs = sf::st_crs(2154), default_crs = sf::st_crs(2154)) +
   labs(title = "Indice de vegetation (NDVI)",
        subtitle = "Bandes Rouge et PIR") +
   theme_carte
@@ -287,7 +291,8 @@ p_grille <- ggplot() +
   geom_sf(data = grille, fill = NA, color = "blue", linewidth = 0.3) +
   geom_sf(data = aoi, fill = NA, color = "red", linewidth = 0.8) +
   coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
-           ylim = c(bbox["ymin"], bbox["ymax"]), crs = 2154) +
+           ylim = c(bbox["ymin"], bbox["ymax"]),
+           crs = sf::st_crs(2154), default_crs = sf::st_crs(2154)) +
   labs(title = "Grille de patches",
        subtitle = sprintf("%d patches de %g m", nrow(grille), taille_patch_m)) +
   theme_carte
@@ -319,7 +324,8 @@ if (inference_ok && !is.null(resultats)) {
     geom_sf(data = aoi, fill = NA, color = "black", linewidth = 0.8) +
     scale_fill_manual(name = "Essence", values = palette_essences, drop = TRUE) +
     coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
-             ylim = c(bbox["ymin"], bbox["ymax"]), crs = 2154) +
+             ylim = c(bbox["ymin"], bbox["ymax"]),
+             crs = sf::st_crs(2154), default_crs = sf::st_crs(2154)) +
     labs(title = "Carte des essences forestieres",
          subtitle = sprintf("Modele MAESTRO - %d patches classifies", nrow(resultats))) +
     theme_carte +
@@ -330,7 +336,8 @@ if (inference_ok && !is.null(resultats)) {
     geom_sf(data = grille, fill = "grey80", color = "grey60", linewidth = 0.2) +
     geom_sf(data = aoi, fill = NA, color = "red", linewidth = 0.8) +
     coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
-             ylim = c(bbox["ymin"], bbox["ymax"]), crs = 2154) +
+             ylim = c(bbox["ymin"], bbox["ymax"]),
+             crs = sf::st_crs(2154), default_crs = sf::st_crs(2154)) +
     annotate("label", x = mean(c(bbox["xmin"], bbox["xmax"])),
              y = mean(c(bbox["ymin"], bbox["ymax"])),
              label = "Inference non executee\n(PyTorch requis)",
