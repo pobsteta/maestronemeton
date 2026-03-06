@@ -417,13 +417,30 @@ def charger_modele(chemin_poids, n_classes=13, device="cpu", **kwargs):
     else:
         # Installer les stubs pour le unpickle du checkpoint MAESTRO
         _install_maestro_stubs()
-        # Lire en memoire puis charger (evite PermissionError sur Windows
-        # quand un autre processus verrouille le fichier)
+        # Charger avec retry (Windows: antivirus/HF cache peuvent verrouiller)
         import io
-        with open(str(chemin), "rb") as f:
-            buffer = io.BytesIO(f.read())
-        checkpoint = torch.load(buffer, map_location=device,
-                                weights_only=False)
+        import time as _time
+        last_err = None
+        for _attempt in range(5):
+            try:
+                with open(str(chemin), "rb") as f:
+                    buffer = io.BytesIO(f.read())
+                checkpoint = torch.load(buffer, map_location=device,
+                                        weights_only=False)
+                last_err = None
+                break
+            except PermissionError as e:
+                last_err = e
+                wait = 2 ** _attempt  # 1, 2, 4, 8, 16 secondes
+                print("  [ATTENTION] Fichier verrouille, nouvelle tentative "
+                      "dans %ds (%d/5)..." % (wait, _attempt + 1))
+                _time.sleep(wait)
+        if last_err is not None:
+            raise PermissionError(
+                "Impossible d'ouvrir le checkpoint apres 5 tentatives: %s\n"
+                "Fermez les autres applications utilisant ce fichier "
+                "(antivirus, autre session R/Python)." % str(chemin)
+            ) from last_err
 
         # Extraire le state_dict du checkpoint PyTorch Lightning
         if isinstance(checkpoint, dict):
