@@ -26,6 +26,15 @@ export(python_module_path)
 export(telecharger_modele)
 export(validate_wms_data)
 export(aligner_dem_sur_rgbi)
+export(taille_patch_modalite)
+
+# --- Sentinel (S1, S2 via STAC Copernicus) ---
+export(s2_bands_config)
+export(search_s2_stac)
+export(search_s1_stac)
+export(download_s2_for_aoi)
+export(download_s1_for_aoi)
+export(aligner_sentinel)
 
 # --- FLAIR (occupation du sol) ---
 export(classes_cosia)
