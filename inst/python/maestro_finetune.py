@@ -271,8 +271,11 @@ class TreeSatAIDataset(Dataset):
                 raise ImportError(
                     "tifffile ou PIL requis: pip install tifffile Pillow")
 
+        import warnings
         try:
-            img = tifffile.imread(str(path))
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message=".*GDAL_NODATA.*")
+                img = tifffile.imread(str(path))
         except Exception:
             from PIL import Image
             img = np.array(Image.open(str(path)))
@@ -340,7 +343,10 @@ class TreeSatAIDataset(Dataset):
 
         try:
             import tifffile
-            img = tifffile.imread(str(sentinel_file)).astype(np.float32)
+            import warnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message=".*GDAL_NODATA.*")
+                img = tifffile.imread(str(sentinel_file)).astype(np.float32)
         except Exception:
             return None
 
