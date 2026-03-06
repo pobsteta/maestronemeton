@@ -378,6 +378,10 @@ download_treesatai <- function(output_dir = "data/TreeSatAI",
 
 
 #' Organiser les fichiers extraits en structure train/test/espece
+#'
+#' Utilise file.rename() (deplacer) au lieu de file.copy() pour eviter
+#' de recopier les donnees sur le meme filesystem. C'est ~100x plus rapide
+#' sur 50k fichiers car c'est une simple operation d'inode.
 #' @keywords internal
 .treesatai_organize_extracted <- function(src_dir, output_dir, mod, split_info) {
   species <- c("Abies", "Acer", "Alnus", "Betula", "Carpinus",
@@ -396,7 +400,7 @@ download_treesatai <- function(output_dir = "data/TreeSatAI",
       if (!dir.exists(split_src)) next
       split_dst <- file.path(output_dir, mod, split)
       if (!dir.exists(split_dst)) dir.create(split_dst, recursive = TRUE)
-      .treesatai_copy_species(split_src, split_dst, species)
+      .treesatai_move_species(split_src, split_dst, species)
     }
     return(invisible(NULL))
   }
@@ -445,15 +449,35 @@ download_treesatai <- function(output_dir = "data/TreeSatAI",
       if (length(tifs) == 0) next
       dst <- file.path(output_dir, mod, split, sp)
       if (!dir.exists(dst)) dir.create(dst, recursive = TRUE)
-      file.copy(tifs, dst, overwrite = FALSE)
+      .treesatai_move_files(tifs, dst)
     }
   }
 }
 
 
-#' Copier les dossiers d'especes d'un split
+#' Deplacer des fichiers (file.rename avec fallback file.copy)
+#'
+#' file.rename() est quasi-instantane sur le meme filesystem (simple
+#' operation d'inode). En cas d'echec (cross-filesystem), on tombe
+#' sur file.copy() + suppression.
 #' @keywords internal
-.treesatai_copy_species <- function(src_split, dst_split, species) {
+.treesatai_move_files <- function(files, dest_dir) {
+  dest_paths <- file.path(dest_dir, basename(files))
+  # file.rename est vectorise et retourne TRUE/FALSE par fichier
+  moved <- file.rename(files, dest_paths)
+  # Fallback pour les fichiers qui n'ont pas pu etre renommes
+  # (cross-filesystem, permissions, etc.)
+  failed <- which(!moved)
+  if (length(failed) > 0) {
+    file.copy(files[failed], dest_paths[failed], overwrite = FALSE)
+    file.remove(files[failed])
+  }
+}
+
+
+#' Deplacer les dossiers d'especes d'un split (move au lieu de copy)
+#' @keywords internal
+.treesatai_move_species <- function(src_split, dst_split, species) {
   src_dirs <- list.dirs(src_split, recursive = FALSE)
   for (src_d in src_dirs) {
     sp_name <- basename(src_d)
@@ -475,7 +499,7 @@ download_treesatai <- function(output_dir = "data/TreeSatAI",
     if (!dir.exists(dst_d)) dir.create(dst_d, recursive = TRUE)
     tifs <- list.files(src_d, pattern = "\\.tif$", full.names = TRUE)
     if (length(tifs) > 0) {
-      file.copy(tifs, dst_d, overwrite = FALSE)
+      .treesatai_move_files(tifs, dst_d)
     }
   }
 }
@@ -578,14 +602,14 @@ download_treesatai <- function(output_dir = "data/TreeSatAI",
   has_splits <- any(grepl("/(train|test)/", all_tifs))
 
   if (has_splits) {
-    # Copier en preservant la structure
+    # Deplacer en preservant la structure
     for (tif in all_tifs) {
       rel <- sub(paste0("^", normalizePath(tmp_extract, winslash = "/"), "/?"),
                  "", normalizePath(tif, winslash = "/"))
       dst <- file.path(output_dir, mod, rel)
       dst_dir <- dirname(dst)
       if (!dir.exists(dst_dir)) dir.create(dst_dir, recursive = TRUE)
-      file.copy(tif, dst, overwrite = FALSE)
+      .treesatai_move_files(tif, dst_dir)
     }
   } else {
     # Pas de splits : creer train/test 90/10
@@ -607,7 +631,7 @@ download_treesatai <- function(output_dir = "data/TreeSatAI",
         if (length(idx) == 0) next
         dst <- file.path(output_dir, mod, split, sp_name)
         if (!dir.exists(dst)) dir.create(dst, recursive = TRUE)
-        file.copy(sp_tifs[idx], dst, overwrite = FALSE)
+        .treesatai_move_files(sp_tifs[idx], dst)
       }
     }
   }
