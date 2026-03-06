@@ -290,6 +290,8 @@ build_date_ranges <- function(annees_sentinel, saison = "ete") {
 
     r <- .read_remote_cog(url, aoi_vect)
     if (!is.null(r)) {
+      # S'assurer qu'on n'a qu'une seule bande par COG
+      if (terra::nlyr(r) > 1) r <- r[[1]]
       names(r) <- band
       layers[[band]] <- r
     }
@@ -311,7 +313,25 @@ build_date_ranges <- function(annees_sentinel, saison = "ete") {
 
   if (length(layers) == 0) return(NULL)
 
-  tryCatch(do.call(c, layers), error = function(e) NULL)
+  # Combiner les bandes : utiliser rast() pour empiler proprement
+  # (do.call(c, ...) peut retourner une liste si les geometries different)
+  tryCatch({
+    result <- layers[[1]]
+    if (length(layers) > 1) {
+      for (i in 2:length(layers)) {
+        result <- c(result, layers[[i]])
+      }
+    }
+    # Verifier que le resultat est bien un SpatRaster
+    if (!inherits(result, "SpatRaster")) {
+      message("  [WARN] Combinaison S2 n'a pas produit un SpatRaster, tentative rast()")
+      result <- terra::rast(layers)
+    }
+    result
+  }, error = function(e) {
+    message(sprintf("  [WARN] Echec combinaison bandes S2: %s", e$message))
+    NULL
+  })
 }
 
 # --- Composite median ---
@@ -345,7 +365,15 @@ calculer_composite_median <- function(rasters) {
     names(composite_layers[[b]]) <- band_names[b]
   }
 
-  composite <- do.call(c, composite_layers)
+  composite <- composite_layers[[1]]
+  if (length(composite_layers) > 1) {
+    for (i in 2:length(composite_layers)) {
+      composite <- c(composite, composite_layers[[i]])
+    }
+  }
+  if (!inherits(composite, "SpatRaster")) {
+    composite <- terra::rast(composite_layers)
+  }
   message(sprintf("  Composite median: %d bandes", terra::nlyr(composite)))
   composite
 }
@@ -809,14 +837,22 @@ download_s1_for_aoi <- function(aoi, output_dir, date_cible = NULL,
 
   if (length(layers) == 0) return(NULL)
 
-  s1 <- tryCatch(
-    do.call(c, layers),
-    error = function(e) {
-      message(sprintf("  [WARN] Echec combinaison S1 %s: %s", orbit,
-                       e$message))
-      NULL
+  s1 <- tryCatch({
+    result <- layers[[1]]
+    if (length(layers) > 1) {
+      for (k in 2:length(layers)) {
+        result <- c(result, layers[[k]])
+      }
     }
-  )
+    if (!inherits(result, "SpatRaster")) {
+      result <- terra::rast(layers)
+    }
+    result
+  }, error = function(e) {
+    message(sprintf("  [WARN] Echec combinaison S1 %s: %s", orbit,
+                     e$message))
+    NULL
+  })
 
   if (!is.null(s1)) {
     message(sprintf("  S1 %s: %d bandes (VV, VH)", orbit, terra::nlyr(s1)))
