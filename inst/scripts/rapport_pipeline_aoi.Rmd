@@ -26,6 +26,19 @@ params:
 ---
 
 ```{r setup, include=FALSE}
+# Fixer le répertoire de travail à la racine du projet
+# (le Rmd est dans inst/scripts/ mais les données sont à la racine)
+project_root <- tryCatch(
+  rprojroot::find_rstudio_root_file(),
+  error = function(e) {
+    # Fallback : remonter depuis inst/scripts/
+    candidate <- normalizePath(file.path(getwd(), "..", ".."), mustWork = FALSE)
+    if (file.exists(file.path(candidate, "DESCRIPTION"))) candidate
+    else getwd()
+  }
+)
+knitr::opts_knit$set(root.dir = project_root)
+
 knitr::opts_chunk$set(
   echo = TRUE,
   message = TRUE,
