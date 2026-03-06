@@ -62,7 +62,7 @@ maestro_pipeline <- function(aoi_path = "data/aoi.gpkg",
                               millesime_irc = NULL,
                               patch_size = 250L,
                               resolution = 0.2,
-                              n_classes = 8L,
+                              n_classes = 7L,
                               use_s2 = FALSE,
                               use_s1 = FALSE,
                               date_sentinel = NULL,
@@ -199,7 +199,7 @@ maestro_pipeline <- function(aoi_path = "data/aoi.gpkg",
   )
 
   # 13. Assembler et exporter
-  essences <- if (n_classes == 8L) essences_treesatai() else essences_pureforest()
+  essences <- if (n_classes == 7L) essences_treesatai() else essences_pureforest()
   resultats <- assembler_resultats(grille, predictions,
                                     essences = essences,
                                     dossier_sortie = output_dir)

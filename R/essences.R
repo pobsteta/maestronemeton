@@ -54,10 +54,10 @@ essences_pureforest <- function() {
 
 #' Classes d'essences forestieres TreeSatAI (8 classes)
 #'
-#' Table des 8 classes regroupees pour le fine-tuning sur TreeSatAI.
-#' Ce schema simplifie les 20 especes TreeSatAI en 7 classes forestieres
-#' + 1 classe coupe/vide. Quand le LiDAR sera integre, on passera aux
-#' 13 classes PureForest completes.
+#' Table des 7 classes regroupees pour le fine-tuning sur TreeSatAI.
+#' Ce schema simplifie les 20 especes TreeSatAI en 7 classes forestieres.
+#' Quand le LiDAR sera integre, on passera aux 13 classes PureForest
+#' completes. La detection coupe/vide est geree en amont via FLAIR.
 #'
 #' Regroupement :
 #' - Chene : Quercus robur, Q. petraea, Q. rubra
@@ -68,7 +68,6 @@ essences_pureforest <- function() {
 #' - Meleze : Larix decidua, L. kaempferi (caduc, phenologie distincte)
 #' - Feuillus divers : Betula, Populus, Alnus, Fraxinus, Acer, Castanea,
 #'   Robinia, Salix, Prunus, Sorbus, Tilia, Carpinus, Taxus
-#' - Coupe/Vide : absence de couvert arbore
 #'
 #' @return Un data.frame avec les colonnes code, classe, nom_latin et type
 #' @export
@@ -77,7 +76,7 @@ essences_pureforest <- function() {
 #' ess[ess$type == "resineux", ]
 essences_treesatai <- function() {
   data.frame(
-    code = 0:7,
+    code = 0:6,
     classe = c(
       "Chene",
       "Hetre",
@@ -85,8 +84,7 @@ essences_treesatai <- function() {
       "Epicea",
       "Douglas/Sapin",
       "Meleze",
-      "Feuillus divers",
-      "Coupe/Vide"
+      "Feuillus divers"
     ),
     nom_latin = c(
       "Quercus spp.",
@@ -95,14 +93,12 @@ essences_treesatai <- function() {
       "Picea abies",
       "Pseudotsuga menziesii, Abies alba",
       "Larix spp.",
-      "Betula, Populus, Alnus, Fraxinus, Acer, etc.",
-      ""
+      "Betula, Populus, Alnus, Fraxinus, Acer, etc."
     ),
     type = c(
       "feuillu", "feuillu",
       "resineux", "resineux", "resineux", "resineux",
-      "feuillu",
-      "non_boise"
+      "feuillu"
     ),
     stringsAsFactors = FALSE
   )

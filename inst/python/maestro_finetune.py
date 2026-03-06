@@ -53,9 +53,9 @@ from maestro_inference import (
 #   4 = Douglas       (Pseudotsuga menziesii) -- sempervirent
 #   5 = Meleze        (Larix spp.)            -- caduc, phenologie differente
 #   6 = Feuillus div. (Betula, Populus, Alnus, Fraxinus, Acer, Castanea, ...)
-#   7 = Coupe/Vide    (absence de couvert)
 #
 # On passera aux 13 classes PureForest quand le LiDAR sera integre.
+# La detection coupe/vide est geree en amont via FLAIR.
 
 ESSENCES_TREESATAI = [
     "Chene",              # 0
@@ -65,10 +65,9 @@ ESSENCES_TREESATAI = [
     "Douglas/Sapin",      # 4 - Pseudotsuga + Abies (resineux sempervirents sombres)
     "Meleze",             # 5 - caduc, phenologie distincte
     "Feuillus divers",    # 6
-    "Coupe/Vide",         # 7
 ]
 
-N_CLASSES_TREESATAI = len(ESSENCES_TREESATAI)  # 8
+N_CLASSES_TREESATAI = len(ESSENCES_TREESATAI)  # 7
 
 # Mapping TreeSatAI 20 especes -> 8 classes regroupees
 TREESATAI_TO_NEMETON = {
@@ -395,7 +394,7 @@ class TreeSatAIDataset(Dataset):
 def finetuner(checkpoint_path, data_dir, output_path,
               epochs=30, lr=1e-3, lr_encoder=1e-5,
               batch_size=16, freeze_encoder=True,
-              modalities=None, n_classes=8,
+              modalities=None, n_classes=7,
               device="cpu", patience=5,
               augment=True, weight_decay=1e-4):
     """
@@ -772,8 +771,8 @@ if __name__ == "__main__":
                         help="Chemin vers le checkpoint pre-entraine (.ckpt)")
     parser.add_argument("--data_dir", required=True,
                         help="Dossier TreeSatAI")
-    parser.add_argument("--output", default="maestro_8classes_treesatai.pt",
-                        help="Chemin de sortie [default: maestro_8classes_treesatai.pt]")
+    parser.add_argument("--output", default="maestro_7classes_treesatai.pt",
+                        help="Chemin de sortie [default: maestro_7classes_treesatai.pt]")
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--lr_encoder", type=float, default=1e-5)

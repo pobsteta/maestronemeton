@@ -44,7 +44,7 @@ ESSENCES = [
     "Peuplier",            # 12 - Populus spp.
 ]
 
-# Classes regroupees TreeSatAI (8 classes) - schema simplifie
+# Classes regroupees TreeSatAI (7 classes) - schema simplifie
 # Utilise pour le fine-tuning tant que le LiDAR n'est pas integre
 ESSENCES_TREESATAI = [
     "Chene",              # 0 - Quercus spp.
@@ -54,7 +54,6 @@ ESSENCES_TREESATAI = [
     "Douglas/Sapin",      # 4 - Pseudotsuga + Abies (sempervirents sombres)
     "Meleze",             # 5 - Larix spp. (caduc)
     "Feuillus divers",    # 6 - Betula, Populus, Alnus, Fraxinus, Acer, etc.
-    "Coupe/Vide",         # 7 - absence de couvert arbore
 ]
 
 # Configuration des modalites MAESTRO
