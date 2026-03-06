@@ -417,7 +417,12 @@ def charger_modele(chemin_poids, n_classes=13, device="cpu", **kwargs):
     else:
         # Installer les stubs pour le unpickle du checkpoint MAESTRO
         _install_maestro_stubs()
-        checkpoint = torch.load(str(chemin), map_location=device,
+        # Lire en memoire puis charger (evite PermissionError sur Windows
+        # quand un autre processus verrouille le fichier)
+        import io
+        with open(str(chemin), "rb") as f:
+            buffer = io.BytesIO(f.read())
+        checkpoint = torch.load(buffer, map_location=device,
                                 weights_only=False)
 
         # Extraire le state_dict du checkpoint PyTorch Lightning
