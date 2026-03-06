@@ -44,12 +44,20 @@ download_treesatai <- function(output_dir = "data/TreeSatAI",
     dir.create(output_dir, recursive = TRUE)
   }
 
-  # Verifier si les donnees existent deja
-  aerial_ok <- .treesatai_check_structure(output_dir, "aerial")
-  if ("aerial" %in% modalities && aerial_ok) {
-    message("  Donnees aerial deja presentes dans: ", output_dir)
+  # Verifier quelles modalites sont deja presentes
+  missing <- character(0)
+  for (mod in modalities) {
+    if (.treesatai_check_structure(output_dir, mod)) {
+      message(sprintf("  Donnees %s deja presentes, skip.", mod))
+    } else {
+      missing <- c(missing, mod)
+    }
+  }
+  if (length(missing) == 0) {
+    message("  Toutes les modalites sont deja presentes dans: ", output_dir)
     return(invisible(output_dir))
   }
+  modalities <- missing
 
   # Essayer HuggingFace d'abord
   if (source %in% c("auto", "huggingface")) {
