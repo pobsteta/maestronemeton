@@ -170,8 +170,14 @@ maestro_pipeline <- function(aoi_path = "data/aoi.gpkg",
                      terra::nlyr(modalites[[mod_name]])))
   }
 
-  # 8. Telecharger le modele
-  fichiers_modele <- telecharger_modele(model_id, token)
+  # 8. Telecharger le modele (ou utiliser un checkpoint local fine-tune)
+  if (file.exists(model_id) &&
+      grepl("\\.(pt|pth|ckpt|safetensors)$", model_id)) {
+    message(sprintf("  Utilisation du checkpoint local: %s", model_id))
+    fichiers_modele <- list(weights = model_id)
+  } else {
+    fichiers_modele <- telecharger_modele(model_id, token)
+  }
 
   # 9. Configurer Python
   configurer_python()

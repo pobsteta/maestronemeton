@@ -501,35 +501,51 @@ def charger_modele(chemin_poids, n_classes=13, device="cpu", **kwargs):
         else:
             state_dict = checkpoint
 
-    # Filtrer: garder les cles pour les modalites selectionnees + encoder_inter
-    prefixes_gardees = ["model.encoder_inter."]
-    for mod_name in mod_names:
-        prefixes_gardees.append("model.patch_embed.%s." % mod_name)
-        enc_name = S1_ENCODER_KEY if mod_name.startswith("s1_") else mod_name
-        prefixes_gardees.append("model.encoder.%s." % enc_name)
+    # Detecter si le checkpoint contient deja la tete de classification
+    # (= checkpoint fine-tune complet) ou seulement les encodeurs (= pre-train MAE)
+    has_head = any(k.startswith("head.") for k in state_dict)
 
-    prefixes_tuple = tuple(prefixes_gardees)
-    filtered_sd = {k: v for k, v in state_dict.items()
-                   if k.startswith(prefixes_tuple)}
+    if has_head:
+        # Checkpoint fine-tune: charger tout (tete incluse)
+        print("  [INFO] Checkpoint fine-tune detecte (tete de classification incluse)")
+        filtered_sd = {k: v for k, v in state_dict.items()
+                       if not k.startswith("_") }
+        print("  Checkpoint: %d cles (fine-tune complet)" % len(filtered_sd))
+        missing, unexpected = modele.load_state_dict(filtered_sd, strict=False)
+        if missing:
+            print("  [INFO] Cles manquantes: %d" % len(missing))
+        if unexpected:
+            print("  [INFO] Cles inattendues (ignorees): %d" % len(unexpected))
+    else:
+        # Checkpoint MAE pre-train: filtrer par modalite, tete sera aleatoire
+        prefixes_gardees = ["model.encoder_inter."]
+        for mod_name in mod_names:
+            prefixes_gardees.append("model.patch_embed.%s." % mod_name)
+            enc_name = S1_ENCODER_KEY if mod_name.startswith("s1_") else mod_name
+            prefixes_gardees.append("model.encoder.%s." % enc_name)
 
-    print("  Checkpoint: %d cles totales, %d cles utilisees"
-          % (len(state_dict), len(filtered_sd)))
+        prefixes_tuple = tuple(prefixes_gardees)
+        filtered_sd = {k: v for k, v in state_dict.items()
+                       if k.startswith(prefixes_tuple)}
 
-    # Charger les poids (mode non strict pour la tete de classification)
-    missing, unexpected = modele.load_state_dict(filtered_sd, strict=False)
+        print("  Checkpoint: %d cles totales, %d cles utilisees"
+              % (len(state_dict), len(filtered_sd)))
 
-    # Analyser les cles manquantes
-    missing_head = [k for k in missing if k.startswith("head.")]
-    missing_other = [k for k in missing if not k.startswith("head.")]
-    if missing_other:
-        print("  [ATTENTION] Cles manquantes (non-head): %d" % len(missing_other))
-        for k in missing_other[:10]:
-            print("    - %s" % k)
-    if missing_head:
-        print("  [INFO] Tete de classification non pre-entrainee "
-              "(%d cles, attendu)" % len(missing_head))
-    if unexpected:
-        print("  [INFO] Cles inattendues (ignorees): %d" % len(unexpected))
+        # Charger les poids (mode non strict pour la tete de classification)
+        missing, unexpected = modele.load_state_dict(filtered_sd, strict=False)
+
+        # Analyser les cles manquantes
+        missing_head = [k for k in missing if k.startswith("head.")]
+        missing_other = [k for k in missing if not k.startswith("head.")]
+        if missing_other:
+            print("  [ATTENTION] Cles manquantes (non-head): %d" % len(missing_other))
+            for k in missing_other[:10]:
+                print("    - %s" % k)
+        if missing_head:
+            print("  [INFO] Tete de classification non pre-entrainee "
+                  "(%d cles, attendu)" % len(missing_head))
+        if unexpected:
+            print("  [INFO] Cles inattendues (ignorees): %d" % len(unexpected))
 
     modele = modele.to(device)
     modele.eval()

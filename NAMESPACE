@@ -28,6 +28,11 @@ export(validate_wms_data)
 export(aligner_dem_sur_rgbi)
 export(taille_patch_modalite)
 
+# --- Fine-tuning (TreeSatAI) ---
+export(download_treesatai)
+export(download_treesatai_hf)
+export(finetune_maestro)
+
 # --- Sentinel (S1, S2 via STAC Planetary Computer / rstac) ---
 export(s2_bands_config)
 export(search_s2_stac)
