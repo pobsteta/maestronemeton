@@ -1,4 +1,9 @@
 #!/usr/bin/env Rscript
+# --- Fix OpenMP avant tout chargement de package ---
+# torch et numpy livrent chacun libiomp5md.dll sur Windows ;
+# sans cette variable le process crash (OMP Error #15).
+Sys.setenv(KMP_DUPLICATE_LIB_OK = "TRUE")
+
 # =============================================================================
 # maestro_essences.R
 # Reconnaissance des essences forestieres a partir d'une zone d'interet (AOI)
@@ -781,27 +786,85 @@ extraire_patches_raster <- function(r, grille, taille_pixels = 250) {
 # 7. INFERENCE AVEC LE MODELE MAESTRO (via reticulate/Python)
 # =============================================================================
 
-#' Configurer l'environnement Python
-configurer_python <- function() {
-  message("=== Configuration de l'environnement Python ===")
-
-  # Chercher un environnement conda existant
-  envs <- tryCatch(reticulate::conda_list(), error = function(e) NULL)
-  if (!is.null(envs) && "maestro" %in% envs$name) {
-    reticulate::use_condaenv("maestro", required = FALSE)
-  } else {
-    reticulate::use_python(Sys.which("python3"), required = FALSE)
+#' Configurer l'environnement Python (pattern FLAIR-HUB)
+configurer_python <- function(envname = "maestro") {
+  if (!requireNamespace("reticulate", quietly = TRUE)) {
+    stop("Le package 'reticulate' est requis. Installez-le avec : ",
+         "install.packages('reticulate')")
   }
 
-  # Verifier les modules Python necessaires
-  modules_requis <- c("torch", "numpy")
-  for (mod in modules_requis) {
-    avail <- reticulate::py_module_available(mod)
-    message(sprintf("  Python %s: %s", mod, ifelse(avail, "OK", "MANQUANT")))
-    if (!avail) {
-      message(sprintf("  Installation de '%s'...", mod))
-      reticulate::py_install(mod)
+  # Eviter le conflit OpenMP sur Windows (torch + numpy livrent chacun libiomp5md.dll)
+  Sys.setenv(KMP_DUPLICATE_LIB_OK = "TRUE")
+
+  # Auto-detection de conda (Miniforge, Miniconda, Anaconda)
+  # On cherche le binaire conda ET le Python de l'environnement AVANT
+  # de charger reticulate pour eviter qu'il s'accroche au mauvais Python.
+  conda_dirs <- if (.Platform$OS.type == "windows") {
+    home <- Sys.getenv("USERPROFILE", Sys.getenv("HOME"))
+    c(file.path(home, "miniforge3"),
+      file.path(home, "mambaforge"),
+      file.path(home, "miniconda3"),
+      file.path(home, "anaconda3"),
+      file.path(Sys.getenv("LOCALAPPDATA"), "miniforge3"),
+      file.path(Sys.getenv("PROGRAMDATA"), "miniforge3"))
+  } else {
+    home <- Sys.getenv("HOME")
+    c(file.path(home, "miniforge3"),
+      file.path(home, "mambaforge"),
+      file.path(home, "miniconda3"),
+      file.path(home, "anaconda3"),
+      "/opt/miniforge3",
+      "/opt/miniconda3")
+  }
+
+  # Chercher le Python de l'environnement conda directement
+  if (nchar(Sys.getenv("RETICULATE_PYTHON")) == 0) {
+    for (conda_root in conda_dirs) {
+      py_path <- if (.Platform$OS.type == "windows") {
+        file.path(conda_root, "envs", envname, "python.exe")
+      } else {
+        file.path(conda_root, "envs", envname, "bin", "python")
+      }
+      if (file.exists(py_path)) {
+        Sys.setenv(RETICULATE_PYTHON = py_path)
+        message("Python de l'env '", envname, "' detecte: ", py_path)
+        break
+      }
     }
+  }
+
+  # Chercher le binaire conda pour reticulate
+  if (nchar(Sys.getenv("RETICULATE_CONDA")) == 0) {
+    conda_suffix <- if (.Platform$OS.type == "windows") {
+      file.path("condabin", "conda.bat")
+    } else {
+      file.path("bin", "conda")
+    }
+    conda_bins <- file.path(conda_dirs, conda_suffix)
+    found <- Filter(file.exists, conda_bins)
+    if (length(found) > 0) {
+      Sys.setenv(RETICULATE_CONDA = found[[1]])
+      message("Conda detecte automatiquement: ", found[[1]])
+    }
+  }
+
+  library(reticulate)
+  use_condaenv(envname, required = TRUE)
+  message("Environnement conda configure: ", envname)
+
+  # Verifier les modules disponibles
+  modules <- c("torch", "numpy", "safetensors")
+  ok <- TRUE
+  for (mod in modules) {
+    avail <- py_module_available(mod)
+    message(sprintf("  Python %s: %s", mod, ifelse(avail, "OK", "MANQUANT")))
+    if (!avail) ok <- FALSE
+  }
+
+  if (!ok) {
+    stop("Modules Python manquants. Installez-les dans l'env '", envname, "':\n",
+         "  conda activate ", envname, "\n",
+         "  pip install torch numpy safetensors")
   }
 
   message("  Python configure.")

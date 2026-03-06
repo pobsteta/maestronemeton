@@ -3,6 +3,7 @@
 export(assembler_resultats)
 export(combine_rgbi_mnt)
 export(combine_rvb_irc)
+export(CONDA_ENV)
 export(configurer_python)
 export(creer_carte_raster)
 export(creer_grille_patches)
