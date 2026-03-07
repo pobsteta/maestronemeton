@@ -26,8 +26,10 @@ import argparse
 from pathlib import Path
 
 import warnings
-# Supprimer les warnings tifffile GDAL_NODATA (inoffensifs, images uint8 avec nodata=-9999)
+import logging
+# Supprimer les warnings/logs tifffile GDAL_NODATA (inoffensifs, images uint8 avec nodata=-9999)
 warnings.filterwarnings("ignore", message=".*GDAL_NODATA.*")
+logging.getLogger("tifffile").setLevel(logging.ERROR)
 
 import torch
 import torch.nn as nn
