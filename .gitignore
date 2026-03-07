@@ -6,6 +6,9 @@
 .RData
 .Ruserdata
 
+# Secrets (token HF)
+.Renviron
+
 # Output
 outputs/
 resultats/
