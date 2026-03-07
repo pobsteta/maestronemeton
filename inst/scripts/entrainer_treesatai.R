@@ -80,7 +80,8 @@ if (!requireNamespace("hfhub", quietly = TRUE))
 model_id <- "IGNF/MAESTRO_FLAIR-HUB_base"
 cat("\nTelechargement du checkpoint MAESTRO depuis", model_id, "...\n")
 
-repo_files <- hfhub::hub_list_files(model_id)
+repo_info <- hfhub::hub_repo_info(model_id)
+repo_files <- sapply(repo_info$siblings, function(x) x$rfilename)
 ckpt_file <- grep("pretrain.*\\.ckpt$", repo_files, value = TRUE)
 if (length(ckpt_file) == 0) stop("Pas de checkpoint .ckpt trouve dans ", model_id)
 ckpt_file <- ckpt_file[1]
