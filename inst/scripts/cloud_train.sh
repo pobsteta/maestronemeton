@@ -45,7 +45,7 @@ cd "$WORK_DIR"
 echo ""
 echo "=== Installation des dependances Python ==="
 
-VENV_DIR="$HOME/venv_maestro"
+VENV_DIR="${VENV_DIR:-$HOME/venv_maestro}"
 if [ ! -d "$VENV_DIR" ]; then
     python3 -m venv "$VENV_DIR"
 fi
