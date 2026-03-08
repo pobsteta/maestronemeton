@@ -41,20 +41,16 @@ if [ ! -d "$WORK_DIR" ]; then
 fi
 cd "$WORK_DIR"
 
-# --- Environnement Python ---
+# --- Environnement Python (venv) ---
 echo ""
 echo "=== Installation des dependances Python ==="
 
-# Detecter si on est dans un env conda ou utiliser pip directement
-if command -v conda &>/dev/null; then
-    echo "Conda detecte, creation de l'env maestro..."
-    conda create -n maestro python=3.11 -y 2>/dev/null || true
-    eval "$(conda shell.bash hook)"
-    conda activate maestro
-    PYTHON="$(which python)"
-else
-    PYTHON="python3"
+VENV_DIR="$HOME/venv_maestro"
+if [ ! -d "$VENV_DIR" ]; then
+    python3 -m venv "$VENV_DIR"
 fi
+source "$VENV_DIR/bin/activate"
+PYTHON="$VENV_DIR/bin/python"
 
 $PYTHON -m pip install --quiet --upgrade pip
 $PYTHON -m pip install --quiet \
@@ -70,9 +66,9 @@ print(f'PyTorch {torch.__version__}')
 print(f'CUDA disponible: {torch.cuda.is_available()}')
 if torch.cuda.is_available():
     print(f'GPU: {torch.cuda.get_device_name(0)}')
-    print(f'VRAM: {torch.cuda.get_device_properties(0).total_mem / 1e9:.1f} Go')
+    print(f'VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} Go')
 else:
-    echo 'ATTENTION: Pas de GPU detecte, entrainement sur CPU'
+    print('ATTENTION: Pas de GPU detecte, entrainement sur CPU')
 "
 
 # --- Telecharger le checkpoint MAESTRO ---
