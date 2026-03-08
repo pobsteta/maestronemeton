@@ -28,8 +28,8 @@ echo ""
 REPO_URL="https://github.com/pobsteta/maestro_nemeton.git"
 BRANCH="cleanup/code-review"
 WORK_DIR="$HOME/maestro_nemeton"
-DATA_DIR="$WORK_DIR/data/treesatai"
-OUTPUT_DIR="$WORK_DIR/outputs/training"
+DATA_DIR="${DATA_DIR:-$WORK_DIR/data/treesatai}"
+OUTPUT_DIR="${OUTPUT_DIR:-$WORK_DIR/outputs/training}"
 EPOCHS=30
 BATCH_SIZE=64
 LR=1e-3
