@@ -231,8 +231,6 @@ try {
     # Ignorer : l'hote n'est peut-etre pas dans known_hosts
 }
 
-Log-Info "Attente du serveur SSH..."
-
 $sshReady = $false
 $sshTimeout = 600      # 10 minutes
 $sshInterval = 15      # secondes entre chaque tentative
@@ -241,10 +239,13 @@ $sshElapsed = 0
 Log-Info "Attente du serveur SSH (timeout: ${sshTimeout}s)..."
 
 while ($sshElapsed -lt $sshTimeout) {
-    $result = $null
     try {
-        $result = ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o "UserKnownHostsFile=NUL" -o BatchMode=yes "root@$PublicIP" "echo ok" 2>&1
-    } catch { }
+        # Ne pas utiliser BatchMode=yes : empeche l'authentification via ssh-agent Windows
+        # Convertir en string pour eviter les problemes de match sur ErrorRecord[]
+        $result = (ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o "UserKnownHostsFile=NUL" "root@$PublicIP" "echo ok" 2>&1) | Out-String
+    } catch {
+        $result = ""
+    }
     if ($result -match "ok") {
         Log-Ok "SSH disponible apres ${sshElapsed}s"
         $sshReady = $true
@@ -258,7 +259,7 @@ while ($sshElapsed -lt $sshTimeout) {
 }
 
 if (-not $sshReady) {
-    Log-Error "Timeout SSH apres $($maxAttempts * 5)s"
+    Log-Error "Timeout SSH apres ${sshTimeout}s"
     Log-Info "L'instance est peut-etre encore en cours de demarrage."
     Log-Info "Essayez manuellement : ssh root@$PublicIP"
     Log-Info "Pour supprimer : scw instance server terminate $ServerId zone=$Zone with-ip=true"
