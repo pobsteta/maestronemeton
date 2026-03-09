@@ -58,10 +58,18 @@ echo ""
 echo "=== Installation des dependances Python ==="
 
 # Installer python3-venv si necessaire (absent sur les images GPU Scaleway)
-if ! python3 -m venv --help > /dev/null 2>&1; then
-    echo "Installation de python3-venv..."
-    apt-get update -qq && apt-get install -y -qq python3-venv > /dev/null 2>&1
+# Note : "python3 -m venv --help" peut reussir meme sans ensurepip,
+# donc on tente de creer un venv temporaire pour verifier
+VENV_TEST="/tmp/_venv_test_$$"
+if ! python3 -m venv "$VENV_TEST" 2>/dev/null; then
+    echo "Installation de python3-venv et ensurepip..."
+    apt-get update -qq
+    # Installer le paquet versionne (ex: python3.10-venv) et le generique
+    PY_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    apt-get install -y -qq "python${PY_VERSION}-venv" python3-venv 2>/dev/null || \
+        apt-get install -y -qq python3-venv
 fi
+rm -rf "$VENV_TEST"
 
 VENV_DIR="${VENV_DIR:-$HOME/venv_maestro}"
 if [ ! -d "$VENV_DIR" ]; then
