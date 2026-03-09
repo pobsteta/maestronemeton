@@ -108,6 +108,9 @@ WORK_DIR="$HOME/maestro_nemeton"
 if [ -d /data ] && mountpoint -q /data 2>/dev/null; then
     DATA_DIR="${DATA_DIR:-/data/treesatai}"
     OUTPUT_DIR="${OUTPUT_DIR:-/data/outputs/training}"
+    # Rediriger le cache HuggingFace vers /data pour eviter de remplir le disque root
+    export HF_HOME="/data/.cache/huggingface"
+    mkdir -p "$HF_HOME"
 else
     DATA_DIR="${DATA_DIR:-$WORK_DIR/data/treesatai}"
     OUTPUT_DIR="${OUTPUT_DIR:-$WORK_DIR/outputs/training}"
