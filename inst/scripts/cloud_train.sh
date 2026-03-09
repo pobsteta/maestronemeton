@@ -173,3 +173,6 @@ echo "      --checkpoint maestro_treesatai_best.pt"
 echo ""
 echo "IMPORTANT: Pense a supprimer l'instance Scaleway !"
 echo "  scw instance server terminate <SERVER_ID>"
+
+# Creer un fichier flag pour indiquer la fin de l'entrainement
+touch ~/TRAINING_DONE
