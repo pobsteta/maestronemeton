@@ -306,10 +306,10 @@ if (-not $sshTestOk) {
 Write-Host ""
 Log-Info "=== Etape 3b : Montage du volume data ==="
 Log-Info "Formatage et montage du volume data sur /data..."
-# Le volume additionnel apparait comme /dev/vdb sur Scaleway
-# On le formate en ext4 (seulement s'il n'est pas deja formate) et on le monte sur /data
+# Le volume additionnel peut apparaitre comme /dev/vdb ou /dev/sdb selon l'instance
+# On detecte automatiquement le disque non monte sans partitions (le volume data)
 # Note : les $ dans les commandes bash sont echappes avec ` pour PowerShell
-ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "set -e; for i in `$(seq 1 30); do [ -b /dev/vdb ] && break; sleep 1; done; if [ ! -b /dev/vdb ]; then echo ERREUR_DEVICE; lsblk; exit 1; fi; blkid /dev/vdb | grep -q ext4 || mkfs.ext4 -q /dev/vdb; mkdir -p /data; mount /dev/vdb /data; df -h /data"
+ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "set -e; DEVICE=`$(lsblk -dnpo NAME,TYPE | awk '`$2==""disk"" && `$1!=""/dev/sda"" && `$1!=""/dev/vda"" {print `$1; exit}'); if [ -z ""`$DEVICE"" ]; then echo ERREUR: aucun disque data trouve; lsblk; exit 1; fi; echo ""Device detecte: `$DEVICE""; blkid `$DEVICE | grep -q ext4 || mkfs.ext4 -q `$DEVICE; mkdir -p /data; mount `$DEVICE /data; df -h /data"
 
 # --- Etape 4 : Deployer et lancer l'entrainement ---
 Write-Host ""
