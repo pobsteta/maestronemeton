@@ -24,6 +24,8 @@
 #   BRANCH=main          Branche git a utiliser
 #   DATA_DIR=...         Repertoire des donnees
 #   OUTPUT_DIR=...       Repertoire de sortie
+#   NOTIFY_EMAIL=...     Adresse email pour notification en fin d'entrainement
+#   NOTIFY_WEBHOOK=...   URL webhook (ntfy.sh, Slack, etc.) pour notification
 # =============================================================================
 
 set -euo pipefail
@@ -176,3 +178,80 @@ echo "  scw instance server terminate <SERVER_ID>"
 
 # Creer un fichier flag pour indiquer la fin de l'entrainement
 touch ~/TRAINING_DONE
+
+# --- Notification par email ---
+NOTIFY_EMAIL="${NOTIFY_EMAIL:-}"
+if [ -n "$NOTIFY_EMAIL" ]; then
+    echo "=== Envoi de la notification par email ==="
+    BEST_MODEL=$(ls -1 "$OUTPUT_DIR"/maestro_treesatai_best.pt 2>/dev/null && echo "oui" || echo "non")
+    $PYTHON -c "
+import smtplib
+from email.mime.text import MIMEText
+import socket
+
+hostname = socket.gethostname()
+ip = '${PUBLIC_IP}'
+body = '''Bonjour,
+
+L'entrainement MAESTRO est termine sur l'instance $hostname ($ip).
+
+  - Date     : $TIMESTAMP
+  - Epochs   : $EPOCHS
+  - Modele   : $BEST_MODEL
+  - Sortie   : $OUTPUT_DIR
+
+Pour recuperer le modele :
+  scp root@${PUBLIC_IP}:$OUTPUT_DIR/maestro_treesatai_best.pt .
+
+IMPORTANT : Pensez a supprimer l'instance Scaleway !
+'''
+
+msg = MIMEText(body)
+msg['Subject'] = '[MAESTRO] Entrainement termine - ' + hostname
+msg['From'] = 'maestro@' + hostname
+msg['To'] = '$NOTIFY_EMAIL'
+
+try:
+    with smtplib.SMTP('localhost', 25, timeout=10) as s:
+        s.sendmail(msg['From'], ['$NOTIFY_EMAIL'], msg.as_string())
+    print('Email envoye a $NOTIFY_EMAIL')
+except Exception as e:
+    print(f'Impossible d envoyer par SMTP local: {e}')
+    print('Tentative via sendmail...')
+    import subprocess
+    try:
+        p = subprocess.Popen(['/usr/sbin/sendmail', '-t'], stdin=subprocess.PIPE)
+        p.communicate(msg.as_string().encode())
+        print('Email envoye via sendmail')
+    except Exception as e2:
+        print(f'Echec sendmail: {e2}')
+        print('Alternative: installez msmtp ou utilisez un webhook.')
+" 2>&1 || echo "  (notification email echouee, non bloquant)"
+fi
+
+# --- Notification par webhook (ntfy.sh, Slack, etc.) ---
+NOTIFY_WEBHOOK="${NOTIFY_WEBHOOK:-}"
+if [ -n "$NOTIFY_WEBHOOK" ]; then
+    echo "=== Envoi de la notification par webhook ==="
+    HOSTNAME=$(hostname)
+    MESSAGE="Entrainement MAESTRO termine sur $HOSTNAME ($PUBLIC_IP) - $TIMESTAMP - Epochs: $EPOCHS"
+    # Detecter le type de webhook
+    case "$NOTIFY_WEBHOOK" in
+        *ntfy.sh*|*ntfy/*)
+            # ntfy.sh : notification push gratuite (mobile + desktop)
+            curl -s -d "$MESSAGE" "$NOTIFY_WEBHOOK" 2>&1 || true
+            ;;
+        *hooks.slack.com*)
+            # Slack webhook
+            curl -s -X POST -H 'Content-type: application/json' \
+                --data "{\"text\":\"$MESSAGE\"}" "$NOTIFY_WEBHOOK" 2>&1 || true
+            ;;
+        *)
+            # Webhook generique (POST avec JSON)
+            curl -s -X POST -H 'Content-type: application/json' \
+                --data "{\"text\":\"$MESSAGE\",\"status\":\"done\",\"epochs\":$EPOCHS}" \
+                "$NOTIFY_WEBHOOK" 2>&1 || true
+            ;;
+    esac
+    echo "Notification webhook envoyee"
+fi

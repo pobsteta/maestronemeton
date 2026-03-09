@@ -16,6 +16,8 @@
 # Usage :
 #   .\inst\scripts\deploy_scaleway.ps1
 #   .\inst\scripts\deploy_scaleway.ps1 -InstanceType L4-1-24G -Epochs 50
+#   .\inst\scripts\deploy_scaleway.ps1 -NotifyEmail mon@email.fr
+#   .\inst\scripts\deploy_scaleway.ps1 -NotifyWebhook https://ntfy.sh/maestro-train
 #   .\inst\scripts\deploy_scaleway.ps1 -DryRun
 #
 # Instances GPU Scaleway recommandees (verifiez la disponibilite avec scw instance server-type list) :
@@ -39,6 +41,8 @@ param(
     [string]$Modalites = "aerial",
     [int]$DataVolumeGB = 100,
     [switch]$Unfreeze,
+    [string]$NotifyEmail = "",
+    [string]$NotifyWebhook = "",
     [switch]$DryRun
 )
 
@@ -365,10 +369,22 @@ $UnfreezeVal = $(if ($Unfreeze) { "1" } else { "" })
 # Note : eviter les here-strings PowerShell (@"..."@) car elles envoient des CRLF via SSH
 Log-Info "Installation de tmux sur l'instance..."
 # Note : utiliser `$null pour echapper le $ PowerShell dans /dev/null
-ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "apt-get update -qq && apt-get install -y -qq tmux > /dev/`$null 2>&1"
+$PkgList = "tmux"
+if ($NotifyEmail -ne "") {
+    $PkgList = "tmux msmtp msmtp-mta"
+    Log-Info "Installation de msmtp pour notification email vers $NotifyEmail"
+}
+ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "apt-get update -qq && apt-get install -y -qq $PkgList > /dev/`$null 2>&1"
 
 Log-Info "Lancement de l'entrainement dans tmux..."
-$TmuxCmd = "export EPOCHS=$Epochs; export BATCH_SIZE=$BatchSize; export LR=$LR; export MODALITES=$Modalites; export UNFREEZE=$UnfreezeVal; bash ~/cloud_train.sh 2>&1 | tee ~/train.log"
+$NotifyExport = ""
+if ($NotifyEmail -ne "") {
+    $NotifyExport += "export NOTIFY_EMAIL=$NotifyEmail; "
+}
+if ($NotifyWebhook -ne "") {
+    $NotifyExport += "export NOTIFY_WEBHOOK=$NotifyWebhook; "
+}
+$TmuxCmd = "export EPOCHS=$Epochs; export BATCH_SIZE=$BatchSize; export LR=$LR; export MODALITES=$Modalites; export UNFREEZE=$UnfreezeVal; ${NotifyExport}bash ~/cloud_train.sh 2>&1 | tee ~/train.log"
 ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "tmux new-session -d -s maestro '$TmuxCmd'"
 
 # Verifier que la session tmux existe
@@ -393,6 +409,12 @@ Write-Host "  Instance  : $InstanceName ($InstanceType)"
 Write-Host "  Server ID : $ServerId"
 Write-Host "  IP        : $PublicIP"
 Write-Host "  Zone      : $Zone"
+if ($NotifyEmail -ne "") {
+    Write-Host "  Email     : $NotifyEmail" -ForegroundColor Cyan
+}
+if ($NotifyWebhook -ne "") {
+    Write-Host "  Webhook   : $NotifyWebhook" -ForegroundColor Cyan
+}
 Write-Host ""
 Write-Host "--- Commandes utiles ---"
 Write-Host ""
