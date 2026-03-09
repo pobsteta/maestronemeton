@@ -334,22 +334,21 @@ if (-not $sshTestOk) {
     Log-Warn "  ssh root@$PublicIP"
 }
 
+# Detecter le repertoire du script (necessaire pour les etapes suivantes)
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RepoRoot = Split-Path -Parent (Split-Path -Parent $ScriptDir)
+
 # --- Etape 3b : Monter le volume data ---
 Write-Host ""
 Log-Info "=== Etape 3b : Montage du volume data ==="
 Log-Info "Formatage et montage du volume data sur /data..."
-# Le volume additionnel peut apparaitre comme /dev/sdb, /dev/vdb ou /dev/xvdb selon l'instance
-# On envoie un petit script bash pour eviter les problemes d'echappement PowerShell
-$MountScript = 'DEVICE=""; for d in /dev/sdb /dev/vdb /dev/xvdb; do [ -b "$d" ] && ! mountpoint -q "$d" 2>/dev/null && DEVICE="$d" && break; done; if [ -z "$DEVICE" ]; then echo "ERREUR: aucun disque data trouve"; lsblk; exit 1; fi; echo "Device detecte: $DEVICE"; blkid "$DEVICE" | grep -q ext4 || mkfs.ext4 -q "$DEVICE"; mkdir -p /data; mount "$DEVICE" /data; df -h /data'
-ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" $MountScript
+# Envoyer le script de montage (fichier separe pour eviter les problemes d'echappement PowerShell)
+scp -o StrictHostKeyChecking=accept-new "$RepoRoot\inst\scripts\mount_data.sh" "root@${PublicIP}:~/"
+ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "sed -i 's/\r$//' ~/mount_data.sh && bash ~/mount_data.sh"
 
 # --- Etape 4 : Deployer et lancer l'entrainement ---
 Write-Host ""
 Log-Info "=== Etape 4 : Deploiement de l'entrainement ==="
-
-# Detecter le repertoire du script
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$RepoRoot = Split-Path -Parent (Split-Path -Parent $ScriptDir)
 
 # Copier le script d'entrainement
 Log-Info "Envoi du script d'entrainement..."
