@@ -129,40 +129,68 @@ if ($DryRun) {
     exit 0
 }
 
-# --- Etape 1 : Creer l'instance GPU ---
+# --- Etape 1 : Verifier les instances existantes et creer ---
 Write-Host ""
 Log-Info "=== Etape 1 : Creation de l'instance GPU ==="
-Log-Info "Creation de l'instance $InstanceType..."
 
-$rawJson = scw instance server create `
-    type=$InstanceType `
-    image=$Image `
-    zone=$Zone `
-    name=$InstanceName `
-    ip=new `
-    -o json 2>&1
-
-# Verifier si la creation a echoue
-$ServerJson = $null
+# Verifier si une instance avec le meme nom existe deja
+Log-Info "Verification des instances existantes..."
+$existingRaw = scw instance server list zone=$Zone name=$InstanceName -o json 2>&1
+$existingServers = $null
 try {
-    $ServerJson = $rawJson | ConvertFrom-Json
-} catch {
-    Log-Error "Echec de la creation de l'instance :"
-    Write-Host $rawJson
-    exit 1
-}
+    $existingServers = $existingRaw | ConvertFrom-Json
+} catch { }
 
-if ($ServerJson.error -or -not $ServerJson.id) {
-    Log-Error "Echec de la creation de l'instance :"
-    Write-Host $rawJson
-    Write-Host ""
-    Log-Info "Listez les types GPU disponibles avec :"
-    Write-Host "  scw instance server-type list zone=$Zone"
-    exit 1
-}
+if ($existingServers -and $existingServers.Count -gt 0) {
+    $existing = $existingServers[0]
+    Log-Warn "Instance '$InstanceName' deja existante : $($existing.id) (etat: $($existing.state))"
+    Log-Info "Reutilisation de l'instance existante."
+    $ServerId = $existing.id
 
-$ServerId = $ServerJson.id
-Log-Ok "Instance creee: $ServerId"
+    # Demarrer si arretee
+    if ($existing.state -eq "stopped") {
+        Log-Info "Demarrage de l'instance arretee..."
+        scw instance server action run $ServerId zone=$Zone 2>&1 | Out-Null
+    }
+} else {
+    Log-Info "Creation de l'instance $InstanceType..."
+    $rawJson = scw instance server create `
+        type=$InstanceType `
+        image=$Image `
+        zone=$Zone `
+        name=$InstanceName `
+        ip=new `
+        -o json 2>&1
+
+    # Verifier si la creation a echoue
+    $ServerJson = $null
+    try {
+        $ServerJson = $rawJson | ConvertFrom-Json
+    } catch {
+        Log-Error "Echec de la creation de l'instance :"
+        Write-Host $rawJson
+        Write-Host ""
+        Log-Info "Verifiez vos quotas : une instance du meme type existe peut-etre deja."
+        Log-Info "  scw instance server list zone=$Zone"
+        Log-Info "Listez les types GPU disponibles avec :"
+        Write-Host "  scw instance server-type list zone=$Zone"
+        exit 1
+    }
+
+    if ($ServerJson.error -or -not $ServerJson.id) {
+        Log-Error "Echec de la creation de l'instance :"
+        Write-Host $rawJson
+        Write-Host ""
+        Log-Info "Verifiez vos quotas : une instance du meme type existe peut-etre deja."
+        Log-Info "  scw instance server list zone=$Zone"
+        Log-Info "Listez les types GPU disponibles avec :"
+        Write-Host "  scw instance server-type list zone=$Zone"
+        exit 1
+    }
+
+    $ServerId = $ServerJson.id
+    Log-Ok "Instance creee: $ServerId"
+}
 
 # --- Etape 2 : Attendre que l'instance soit prete ---
 Write-Host ""
@@ -173,22 +201,42 @@ scw instance server wait $ServerId zone=$Zone timeout=600s
 
 # Recuperer l'IP publique
 $ServerInfo = scw instance server get $ServerId zone=$Zone -o json | ConvertFrom-Json
-$PublicIP = $ServerInfo.public_ip.address
+
+# Extraire l'IP publique (gerer les differents formats de reponse)
+$PublicIP = $null
+if ($ServerInfo.public_ip -and $ServerInfo.public_ip.address) {
+    $PublicIP = $ServerInfo.public_ip.address
+} elseif ($ServerInfo.public_ips -and $ServerInfo.public_ips.Count -gt 0) {
+    $PublicIP = $ServerInfo.public_ips[0].address
+}
+
+if (-not $PublicIP) {
+    Log-Error "Impossible de recuperer l'IP publique de l'instance."
+    Log-Info "Verifiez manuellement :"
+    Write-Host "  scw instance server get $ServerId zone=$Zone"
+    Log-Info "Pour supprimer : scw instance server terminate $ServerId zone=$Zone with-ip=true"
+    exit 1
+}
 Log-Ok "Instance prete: $PublicIP"
 
 # --- Etape 3 : Attendre que SSH soit disponible ---
 Write-Host ""
 Log-Info "=== Etape 3 : Connexion SSH ==="
+
+# Supprimer l'ancienne cle SSH pour cette IP (evite l'erreur "host key changed")
+Log-Info "Nettoyage des anciennes cles SSH pour $PublicIP..."
+ssh-keygen -R $PublicIP 2>&1 | Out-Null
+
 Log-Info "Attente du serveur SSH..."
 
 $sshReady = $false
-$maxAttempts = 60  # 60 x 5s = 300s (5 minutes) - les GPU instances sont lentes a demarrer
+$maxAttempts = 90  # 90 x 5s = 450s (7.5 minutes) - les GPU instances sont lentes a demarrer
 for ($i = 1; $i -le $maxAttempts; $i++) {
     $result = $null
     try {
-        $result = ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes "root@$PublicIP" "echo ok" 2>$null
+        $result = ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o "UserKnownHostsFile=NUL" -o BatchMode=yes "root@$PublicIP" "echo ok" 2>&1
     } catch { }
-    if ($result -eq "ok") {
+    if ($result -match "ok") {
         Log-Ok "SSH disponible"
         $sshReady = $true
         break
@@ -217,14 +265,14 @@ $RepoRoot = Split-Path -Parent (Split-Path -Parent $ScriptDir)
 
 # Copier le script d'entrainement
 Log-Info "Envoi du script d'entrainement..."
-scp -o StrictHostKeyChecking=no "$RepoRoot\inst\scripts\cloud_train.sh" "root@${PublicIP}:~/"
+scp -o StrictHostKeyChecking=no -o "UserKnownHostsFile=NUL" "$RepoRoot\inst\scripts\cloud_train.sh" "root@${PublicIP}:~/"
 
 # Preparer le flag unfreeze
 $UnfreezeVal = $(if ($Unfreeze) { "1" } else { "" })
 
 # Lancer l'entrainement dans tmux
 Log-Info "Lancement de l'entrainement dans tmux..."
-ssh -o StrictHostKeyChecking=no "root@$PublicIP" @"
+ssh -o StrictHostKeyChecking=no -o "UserKnownHostsFile=NUL" "root@$PublicIP" @"
 apt-get update -qq && apt-get install -y -qq tmux > /dev/null 2>&1
 tmux new-session -d -s maestro "export EPOCHS=$Epochs; export BATCH_SIZE=$BatchSize; export LR=$LR; export MODALITES=$Modalites; export UNFREEZE=$UnfreezeVal; bash ~/cloud_train.sh 2>&1 | tee ~/train.log"
 "@
