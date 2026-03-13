@@ -24,9 +24,75 @@
 #   BRANCH=main          Branche git a utiliser
 #   DATA_DIR=...         Repertoire des donnees
 #   OUTPUT_DIR=...       Repertoire de sortie
+#   NOTIFY_EMAIL=...     Adresse email pour notification en fin d'entrainement
+#   NOTIFY_WEBHOOK=...   URL webhook (ntfy.sh, Slack, etc.) pour notification
 # =============================================================================
 
 set -euo pipefail
+
+# --- Notifications (email + webhook) ---
+NOTIFY_EMAIL="${NOTIFY_EMAIL:-}"
+NOTIFY_WEBHOOK="${NOTIFY_WEBHOOK:-}"
+
+# Fonction generique d'envoi de notification
+# Usage : send_notification "sujet" "message court" "corps email detaille"
+send_notification() {
+    local SUBJECT="$1"
+    local SHORT_MSG="$2"
+    local BODY="${3:-$SHORT_MSG}"
+
+    # --- Email ---
+    if [ -n "$NOTIFY_EMAIL" ]; then
+        echo "  -> Envoi email a $NOTIFY_EMAIL"
+        python3 -c "
+import smtplib
+from email.mime.text import MIMEText
+import socket
+
+hostname = socket.gethostname()
+body = '''$BODY'''
+
+msg = MIMEText(body)
+msg['Subject'] = '$SUBJECT'
+msg['From'] = 'maestro@' + hostname
+msg['To'] = '$NOTIFY_EMAIL'
+
+try:
+    with smtplib.SMTP('localhost', 25, timeout=10) as s:
+        s.sendmail(msg['From'], ['$NOTIFY_EMAIL'], msg.as_string())
+    print('    Email envoye')
+except Exception as e:
+    print(f'    SMTP local echoue: {e}')
+    import subprocess
+    try:
+        p = subprocess.Popen(['/usr/sbin/sendmail', '-t'], stdin=subprocess.PIPE)
+        p.communicate(msg.as_string().encode())
+        print('    Email envoye via sendmail')
+    except Exception as e2:
+        print(f'    Echec sendmail: {e2}')
+" 2>&1 || echo "  (notification email echouee, non bloquant)"
+    fi
+
+    # --- Webhook ---
+    if [ -n "$NOTIFY_WEBHOOK" ]; then
+        echo "  -> Envoi webhook"
+        case "$NOTIFY_WEBHOOK" in
+            *ntfy.sh*|*ntfy/*)
+                curl -s -H "Title: $SUBJECT" -d "$SHORT_MSG" "$NOTIFY_WEBHOOK" 2>&1 || true
+                ;;
+            *hooks.slack.com*)
+                curl -s -X POST -H 'Content-type: application/json' \
+                    --data "{\"text\":\"*$SUBJECT*\n$SHORT_MSG\"}" "$NOTIFY_WEBHOOK" 2>&1 || true
+                ;;
+            *)
+                curl -s -X POST -H 'Content-type: application/json' \
+                    --data "{\"subject\":\"$SUBJECT\",\"text\":\"$SHORT_MSG\"}" \
+                    "$NOTIFY_WEBHOOK" 2>&1 || true
+                ;;
+        esac
+        echo "    Webhook envoye"
+    fi
+}
 
 echo "========================================================"
 echo " MAESTRO - Entrainement GPU sur Scaleway"
@@ -38,8 +104,17 @@ echo ""
 REPO_URL="https://github.com/pobsteta/maestro_nemeton.git"
 BRANCH="${BRANCH:-main}"
 WORK_DIR="$HOME/maestro_nemeton"
-DATA_DIR="${DATA_DIR:-$WORK_DIR/data/treesatai}"
-OUTPUT_DIR="${OUTPUT_DIR:-$WORK_DIR/outputs/training}"
+# Utiliser /data si le volume data est monte pour eviter de remplir le disque root
+if [ -d /data ] && mountpoint -q /data 2>/dev/null; then
+    DATA_DIR="${DATA_DIR:-/data/treesatai}"
+    OUTPUT_DIR="${OUTPUT_DIR:-/data/outputs/training}"
+    # Rediriger le cache HuggingFace vers /data pour eviter de remplir le disque root
+    export HF_HOME="/data/.cache/huggingface"
+    mkdir -p "$HF_HOME"
+else
+    DATA_DIR="${DATA_DIR:-$WORK_DIR/data/treesatai}"
+    OUTPUT_DIR="${OUTPUT_DIR:-$WORK_DIR/outputs/training}"
+fi
 EPOCHS="${EPOCHS:-30}"
 BATCH_SIZE="${BATCH_SIZE:-64}"
 LR="${LR:-1e-3}"
@@ -57,7 +132,28 @@ cd "$WORK_DIR"
 echo ""
 echo "=== Installation des dependances Python ==="
 
-VENV_DIR="${VENV_DIR:-$HOME/venv_maestro}"
+# Installer python3-venv si necessaire (absent sur les images GPU Scaleway)
+# Note : "python3 -m venv --help" peut reussir meme sans ensurepip,
+# donc on tente de creer un venv temporaire pour verifier
+VENV_TEST="/tmp/_venv_test_$$"
+if ! python3 -m venv "$VENV_TEST" 2>/dev/null; then
+    echo "Installation de python3-venv et ensurepip..."
+    apt-get update -qq
+    # Installer le paquet versionne (ex: python3.10-venv) et le generique
+    PY_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    apt-get install -y -qq "python${PY_VERSION}-venv" python3-venv 2>/dev/null || \
+        apt-get install -y -qq python3-venv
+fi
+rm -rf "$VENV_TEST"
+
+# Utiliser /data si le volume data est monte, sinon $HOME
+if [ -d /data ] && mountpoint -q /data 2>/dev/null; then
+    DEFAULT_VENV="/data/venv_maestro"
+    echo "Volume data detecte sur /data - utilisation pour le venv et les donnees"
+else
+    DEFAULT_VENV="$HOME/venv_maestro"
+fi
+VENV_DIR="${VENV_DIR:-$DEFAULT_VENV}"
 if [ ! -d "$VENV_DIR" ]; then
     python3 -m venv "$VENV_DIR"
 fi
@@ -109,6 +205,32 @@ if [ -n "$UNFREEZE" ]; then
     UNFREEZE_FLAG="--unfreeze"
 fi
 
+# --- Notification de debut ---
+GPU_NAME=$($PYTHON -c "import torch; print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')" 2>/dev/null || echo "inconnu")
+PUBLIC_IP=$(curl -s http://169.254.42.42/conf?format=json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('public_ip',{}).get('address','<IP_INSTANCE>'))" 2>/dev/null || echo "<IP_INSTANCE>")
+HOSTNAME=$(hostname)
+START_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+
+send_notification \
+    "[MAESTRO] Entrainement demarre" \
+    "Entrainement lance sur $HOSTNAME ($PUBLIC_IP) - GPU: $GPU_NAME - $EPOCHS epochs, batch $BATCH_SIZE, lr $LR, modalites $MODALITES" \
+    "Bonjour,
+
+L'entrainement MAESTRO vient de demarrer.
+
+  - Instance : $HOSTNAME ($PUBLIC_IP)
+  - GPU      : $GPU_NAME
+  - Debut    : $START_TIME
+  - Epochs   : $EPOCHS
+  - Batch    : $BATCH_SIZE
+  - LR       : $LR
+  - Modalites: $MODALITES
+
+Pour suivre en temps reel :
+  ssh -t root@${PUBLIC_IP} 'tmux attach -t maestro'
+
+Vous recevrez une notification quand ce sera termine."
+
 # Adapter le nombre de workers au nombre de CPUs
 N_WORKERS=$(nproc --ignore=2 2>/dev/null || echo 4)
 N_WORKERS=$((N_WORKERS > 8 ? 8 : N_WORKERS))
@@ -136,7 +258,6 @@ echo "Modeles sauvegardes :"
 ls -lh "$OUTPUT_DIR"/*.pt 2>/dev/null || echo "  (aucun modele trouve)"
 echo ""
 echo "Pour recuperer le modele sur ton PC :"
-PUBLIC_IP=$(curl -s http://169.254.42.42/conf?format=json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('public_ip',{}).get('address','<IP_INSTANCE>'))" 2>/dev/null || echo "<IP_INSTANCE>")
 echo "  scp root@${PUBLIC_IP}:$OUTPUT_DIR/maestro_treesatai_best.pt ."
 echo ""
 echo "Puis predire sur votre AOI :"
@@ -146,3 +267,32 @@ echo "      --checkpoint maestro_treesatai_best.pt"
 echo ""
 echo "IMPORTANT: Pense a supprimer l'instance Scaleway !"
 echo "  scw instance server terminate <SERVER_ID>"
+
+# Creer un fichier flag pour indiquer la fin de l'entrainement
+touch ~/TRAINING_DONE
+
+# --- Notification de fin ---
+END_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+BEST_MODEL=$(ls -1 "$OUTPUT_DIR"/maestro_treesatai_best.pt 2>/dev/null && echo "oui" || echo "non")
+DUREE=$((SECONDS / 60))
+
+send_notification \
+    "[MAESTRO] Entrainement termine !" \
+    "Entrainement termine sur $HOSTNAME ($PUBLIC_IP) - Duree: ${DUREE}min - $EPOCHS epochs - Modele: $BEST_MODEL" \
+    "Bonjour,
+
+L'entrainement MAESTRO est termine !
+
+  - Instance : $HOSTNAME ($PUBLIC_IP)
+  - Debut    : $START_TIME
+  - Fin      : $END_TIME
+  - Duree    : ${DUREE} minutes
+  - Epochs   : $EPOCHS
+  - Modele   : $BEST_MODEL
+  - Sortie   : $OUTPUT_DIR
+
+Pour recuperer le modele :
+  scp root@${PUBLIC_IP}:$OUTPUT_DIR/maestro_treesatai_best.pt .
+
+IMPORTANT : Pensez a supprimer l'instance Scaleway !
+  scw instance server terminate <SERVER_ID>"
