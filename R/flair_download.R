@@ -81,46 +81,97 @@ hf_download_file <- function(repo_id, filename, dest_dir, token = NULL) {
   dest_file
 }
 
+#' Mapping des noms de modalites vers les suffixes ZIP FLAIR-HUB
+#'
+#' @return Liste nommee : nom interne -> suffixe dans le nom du ZIP
+#' @keywords internal
+.flair_modality_mapping <- function() {
+  list(
+    aerial     = "AERIAL_RGBI",
+    dem        = "DEM_ELEV",
+    s2         = "SENTINEL2_TS",
+    s1_asc     = "SENTINEL1-ASC_TS",
+    s1_des     = "SENTINEL1-DESC_TS",
+    spot       = "SPOT_RGBI",
+    labels_cosia = "AERIAL_LABEL-COSIA",
+    labels_lpis  = "ALL_LABEL-LPIS"
+  )
+}
+
+
 #' Telecharger un sous-ensemble du dataset FLAIR-HUB
 #'
-#' Telecharge les fichiers d'une modalite et d'un domaine specifiques
-#' du dataset FLAIR-HUB depuis HuggingFace.
+#' Telecharge le fichier ZIP d'une modalite et d'un domaine specifiques
+#' du dataset FLAIR-HUB depuis HuggingFace, puis le dezippe.
 #'
-#' @param modalite Modalite a telecharger: "aerial", "dem", "spot", "s2", "s1",
-#'   "labels_cosia", "labels_lpis"
-#' @param domaine Domaine geographique (ex: "D001_2019")
+#' Les fichiers FLAIR-HUB sont organises en archives ZIP nommees
+#' `data/DXXX-YYYY_MODALITY.zip` (ex: `data/D033-2018_AERIAL_RGBI.zip`).
+#'
+#' @param modalite Modalite a telecharger: "aerial", "dem", "s2", "s1_asc",
+#'   "s1_des", "spot", "labels_cosia", "labels_lpis"
+#' @param domaine Identifiant domaine-annee (ex: "D033-2018"). Utiliser
+#'   [lister_domaines_flair()] pour voir les domaines disponibles.
 #' @param data_dir Repertoire de base pour les donnees
 #' @param repo_id Identifiant du repository (defaut: "IGNF/FLAIR-HUB")
 #' @param token Token HuggingFace (optionnel)
-#' @return Vecteur de chemins de fichiers telecharges
+#' @return Chemin du repertoire contenant les TIF extraits (invisible)
 #' @export
 download_flair_subset <- function(modalite, domaine = NULL,
                                    data_dir = "data/flair_hub",
                                    repo_id = "IGNF/FLAIR-HUB",
                                    token = NULL) {
-  message(sprintf("=== Telechargement FLAIR-HUB: %s ===", modalite))
+  mod_map <- .flair_modality_mapping()
+  if (!modalite %in% names(mod_map)) {
+    stop(sprintf("Modalite inconnue: '%s'. Valides: %s",
+                 modalite, paste(names(mod_map), collapse = ", ")))
+  }
+  mod_suffix <- mod_map[[modalite]]
 
-  path <- modalite
-  if (!is.null(domaine)) {
-    path <- file.path(modalite, domaine)
+  if (is.null(domaine)) {
+    stop("Le parametre 'domaine' est requis (ex: 'D033-2018')")
   }
 
-  files <- hf_list_files(repo_id, path = path, token = token)
-  if (length(files) == 0) {
-    warning("Aucun fichier trouve pour ", path)
-    return(character(0))
+  # Construire le nom du fichier ZIP
+  zip_name <- sprintf("data/%s_%s.zip", domaine, mod_suffix)
+  message(sprintf("  Telechargement: %s", zip_name))
+
+  # Repertoire de destination pour le ZIP
+  zip_dir <- file.path(data_dir, ".zips")
+  dir.create(zip_dir, recursive = TRUE, showWarnings = FALSE)
+  zip_path <- file.path(zip_dir, basename(zip_name))
+
+  # Repertoire d'extraction
+  extract_dir <- file.path(data_dir, modalite, domaine)
+
+  # Verifier si deja extrait
+  if (dir.exists(extract_dir)) {
+    tifs <- list.files(extract_dir, pattern = "\\.tif$", recursive = TRUE)
+    if (length(tifs) > 0) {
+      message(sprintf("  Deja extrait: %d TIF dans %s", length(tifs), extract_dir))
+      return(invisible(extract_dir))
+    }
   }
 
-  # Filtrer les fichiers .tif
-  tif_files <- files[grepl("\\.tif$", files, ignore.case = TRUE)]
-  message(sprintf("  %d fichiers TIF trouves", length(tif_files)))
+  # Telecharger le ZIP
+  if (!file.exists(zip_path)) {
+    hf_download_file(repo_id, zip_name, zip_dir, token)
+  }
 
-  downloaded <- vapply(tif_files, function(f) {
-    dest_dir <- file.path(data_dir, dirname(f))
-    hf_download_file(repo_id, f, dest_dir, token)
-  }, character(1))
+  if (!file.exists(zip_path)) {
+    warning(sprintf("Echec telechargement: %s", zip_name))
+    return(invisible(NULL))
+  }
 
-  downloaded
+  # Extraire
+  dir.create(extract_dir, recursive = TRUE, showWarnings = FALSE)
+  message(sprintf("  Extraction dans: %s", extract_dir))
+  utils::unzip(zip_path, exdir = extract_dir)
+
+  # Compter les TIF extraits
+  tifs <- list.files(extract_dir, pattern = "\\.tif$", recursive = TRUE)
+  message(sprintf("  %d fichiers TIF extraits", length(tifs)))
+
+  invisible(extract_dir)
 }
 
 #' Lister les domaines FLAIR-HUB disponibles
@@ -172,23 +223,25 @@ lister_domaines_flair <- function(repo_id = "IGNF/FLAIR-HUB",
     "094" = "Val-de-Marne", "095" = "Val-d'Oise"
   )
 
-  # Lister les sous-dossiers du dossier aerial/
-  files <- hf_list_files(repo_id, path = "aerial", token = token)
+  # Lister les fichiers ZIP dans data/
+  files <- hf_list_files(repo_id, path = "data", token = token)
   if (length(files) == 0) {
     warning("Impossible de lister les domaines FLAIR-HUB")
     return(data.frame())
   }
 
-  # Extraire les noms de domaine (D001_2019, D013_2020, ...)
-  domaines <- unique(dirname(sub("^aerial/", "", files)))
-  domaines <- domaines[grepl("^D[0-9]{3}_[0-9]{4}$", domaines)]
+  # Filtrer les ZIP AERIAL_RGBI pour extraire les domaines
+  aerial_zips <- files[grepl("_AERIAL_RGBI\\.zip$", files)]
+  # Extraire le domaine-annee : "data/D033-2018_AERIAL_RGBI.zip" -> "D033-2018"
+  domaines <- sub("^data/(.+)_AERIAL_RGBI\\.zip$", "\\1", aerial_zips)
   domaines <- sort(domaines)
 
   # Construire le data.frame
+  # Format: D033-2018, D024047-2021, D054057-2018
   result <- data.frame(
     domaine = domaines,
-    numero_dep = sub("^D([0-9]{3})_.*", "\\1", domaines),
-    annee = as.integer(sub("^D[0-9]{3}_([0-9]{4})$", "\\1", domaines)),
+    numero_dep = sub("^D([0-9]{3,6})-.*", "\\1", domaines),
+    annee = as.integer(sub("^D[0-9]{3,6}-([0-9]{4})$", "\\1", domaines)),
     stringsAsFactors = FALSE
   )
   result$departement <- deps[result$numero_dep]
@@ -222,35 +275,37 @@ domaines_recommandes_segmentation <- function(niveau = "standard") {
   # - Meleze : Alpes du Sud
   # - Peuplier : vallees fluviales (Loire, Garonne)
 
+  # Noms reels des domaines FLAIR-HUB (format DXXX-YYYY)
+  # Certains departements sont groupes (D024047, D025039, D054057)
   minimal <- c(
-    "D033_2020",  # Gironde     : pin maritime, chene
-    "D063_2019",  # Puy-de-Dome : douglas, hetre, epicea
-    "D088_2019",  # Vosges      : epicea, sapin, hetre
-    "D024_2020",  # Dordogne    : chataignier, chene
-    "D077_2020"   # Seine-et-Marne : chene, hetre (Fontainebleau)
+    "D033-2018",     # Gironde     : pin maritime, chene
+    "D063-2019",     # Puy-de-Dome : douglas, hetre, epicea
+    "D068-2021",     # Haut-Rhin   : epicea, sapin, hetre (Vosges)
+    "D024047-2021",  # Dordogne+Lot-et-Garonne : chataignier, chene, peuplier
+    "D077-2021"      # Seine-et-Marne : chene, hetre (Fontainebleau)
   )
 
   standard <- c(
     minimal,
-    "D040_2020",  # Landes      : pin maritime
-    "D039_2019",  # Jura        : epicea, sapin, hetre
-    "D019_2019",  # Correze     : chataignier, hetre, douglas
-    "D005_2019",  # Hautes-Alpes: meleze, pin sylvestre
-    "D045_2019"   # Loiret      : chene, pin sylvestre, peuplier
+    "D040-2021",     # Landes      : pin maritime
+    "D025039-2020",  # Doubs+Jura  : epicea, sapin, hetre
+    "D058-2020",     # Nievre      : chene, hetre, douglas
+    "D005-2018",     # Hautes-Alpes: meleze, pin sylvestre
+    "D045-2020"      # Loiret      : chene, pin sylvestre, peuplier
   )
 
   complet <- c(
     standard,
-    "D048_2019",  # Lozere      : pin sylvestre, hetre, epicea
-    "D038_2020",  # Isere       : epicea, sapin, hetre
-    "D015_2019",  # Cantal      : hetre, epicea, douglas
-    "D057_2019",  # Moselle     : hetre, chene
-    "D073_2019",  # Savoie      : epicea, meleze
-    "D047_2020",  # Lot-et-Garonne : chene, peuplier
-    "D012_2019",  # Aveyron     : chene, pin sylvestre, hetre
-    "D067_2019",  # Bas-Rhin    : hetre, sapin, chene
-    "D081_2020",  # Tarn        : chene, chataignier, douglas
-    "D007_2019"   # Ardeche     : chataignier, pin, chene
+    "D046-2019",     # Lot         : chene, chataignier
+    "D038-2021",     # Isere       : epicea, sapin, hetre
+    "D015-2020",     # Cantal      : hetre, epicea, douglas
+    "D054057-2018",  # Meurthe-et-Moselle+Moselle : hetre, chene
+    "D073-2022",     # Savoie      : epicea, meleze
+    "D012-2019",     # Aveyron     : chene, pin sylvestre, hetre
+    "D067-2021",     # Bas-Rhin    : hetre, sapin, chene
+    "D081-2020",     # Tarn        : chene, chataignier, douglas
+    "D007-2020",     # Ardeche     : chataignier, pin, chene
+    "D064-2021"      # Pyrenees-Atlantiques : hetre, chene, pin
   )
 
   domaines <- switch(niveau,
@@ -316,13 +371,11 @@ download_flair_toy <- function(data_dir = "data/flair_hub_toy",
   message("=== Telechargement du toy dataset FLAIR-HUB ===")
   fs::dir_create(data_dir)
 
-  repo_id <- "IGNF/FLAIR-HUB"
-
-  # Telecharger un petit domaine d'exemple
-  download_flair_subset("aerial", domaine = "D001_2019",
-                         data_dir = data_dir, repo_id = repo_id, token = token)
-  download_flair_subset("labels_cosia", domaine = "D001_2019",
-                         data_dir = data_dir, repo_id = repo_id, token = token)
+  # Utiliser un petit domaine d'exemple
+  download_flair_subset("aerial", domaine = "D004-2021",
+                         data_dir = data_dir)
+  download_flair_subset("dem", domaine = "D004-2021",
+                         data_dir = data_dir)
 
   message("Toy dataset telecharge dans: ", data_dir)
   data_dir
@@ -354,8 +407,8 @@ scan_flair_files <- function(data_dir = "data/flair_hub") {
     return(list())
   }
 
-  modalites <- c("aerial", "dem", "spot", "s2", "s1",
-                 "labels_cosia", "labels_lpis")
+  modalites <- c("aerial", "dem", "spot", "s2", "s1_asc", "s1_des",
+                 "labels_cosia", "labels_lpis", "labels_ndp0")
 
   result <- list()
   for (mod in modalites) {
