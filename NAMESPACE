@@ -69,6 +69,8 @@ export(executer_segmentation)
 export(preparer_patches_entrainement)
 export(maestro_segmentation_pipeline)
 export(preparer_donnees_segmentation)
+export(labelliser_flair_bdforet)
+export(preparer_flair_segmentation)
 
 # --- Telechargement FLAIR-HUB dataset ---
 export(hf_list_files)

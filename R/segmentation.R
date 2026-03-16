@@ -411,3 +411,191 @@ preparer_patches_entrainement <- function(modalites, labels, aoi,
                  n_val = length(val_idx),
                  n_skipped = n_skipped))
 }
+
+
+#' Preparer les patches FLAIR-HUB pour l'entrainement du decodeur
+#'
+#' Organise les patches FLAIR-HUB existants (deja labellises avec
+#' [labelliser_flair_bdforet()]) en structure train/val attendue par
+#' `train_segmentation.py`. Les patches avec moins de `min_forest_pct`%
+#' de foret sont exclus.
+#'
+#' Structure de sortie :
+#' ```
+#' output_dir/
+#'   train/
+#'     aerial/   patch_00001.tif, ...
+#'     dem/      patch_00001.tif, ...
+#'     labels/   patch_00001.tif, ...
+#'   val/
+#'     aerial/   ...
+#'     dem/      ...
+#'     labels/   ...
+#' ```
+#'
+#' @param flair_dir Repertoire racine FLAIR-HUB contenant aerial/, dem/,
+#'   labels_ndp0/ (issu de [labelliser_flair_bdforet()])
+#' @param output_dir Repertoire de sortie pour les patches reorganises
+#' @param modalites Vecteur des modalites a inclure (defaut: `c("aerial", "dem")`)
+#' @param val_ratio Proportion de patches pour la validation (defaut: 0.15)
+#' @param min_forest_pct Pourcentage minimum de foret pour garder un patch
+#'   (defaut: 10)
+#' @param domaines Vecteur de domaines a utiliser (`NULL` = tous)
+#' @param max_patches Nombre maximum de patches a utiliser (`NULL` = tous)
+#' @return Liste avec n_train, n_val, n_skipped
+#' @export
+preparer_flair_segmentation <- function(flair_dir = "data/flair_hub",
+                                          output_dir = "data/segmentation",
+                                          modalites = c("aerial", "dem"),
+                                          val_ratio = 0.15,
+                                          min_forest_pct = 10,
+                                          domaines = NULL,
+                                          max_patches = NULL) {
+  message("=== Preparation patches FLAIR-HUB pour segmentation ===")
+
+  # Verifier que les labels NDP0 existent
+  labels_dir <- file.path(flair_dir, "labels_ndp0")
+  if (!dir.exists(labels_dir)) {
+    stop("Dossier labels_ndp0/ introuvable. Lancez d'abord labelliser_flair_bdforet()")
+  }
+
+  # Detecter les domaines
+  if (is.null(domaines)) {
+    domaines <- list.dirs(file.path(flair_dir, "aerial"),
+                          recursive = FALSE, full.names = FALSE)
+    if (length(domaines) == 0) domaines <- ""
+  }
+
+  # Collecter tous les patches avec label NDP0
+  patch_list <- data.frame(
+    patch_id = character(0),
+    domaine = character(0),
+    label_path = character(0),
+    stringsAsFactors = FALSE
+  )
+
+  for (dom in domaines) {
+    if (nchar(dom) > 0) {
+      lbl_dir <- file.path(labels_dir, dom)
+      aer_dir <- file.path(flair_dir, "aerial", dom)
+    } else {
+      lbl_dir <- labels_dir
+      aer_dir <- file.path(flair_dir, "aerial")
+    }
+
+    if (!dir.exists(lbl_dir)) next
+
+    label_files <- list.files(lbl_dir, pattern = "\\.tif$", full.names = TRUE)
+    for (lf in label_files) {
+      pid <- tools::file_path_sans_ext(basename(lf))
+      # Verifier que le aerial correspondant existe
+      aerial_tif <- file.path(aer_dir, paste0(pid, ".tif"))
+      if (!file.exists(aerial_tif)) next
+
+      patch_list <- rbind(patch_list, data.frame(
+        patch_id = pid,
+        domaine = dom,
+        label_path = lf,
+        stringsAsFactors = FALSE
+      ))
+    }
+  }
+
+  message(sprintf("  %d patches avec labels NDP0 trouves", nrow(patch_list)))
+
+  if (nrow(patch_list) == 0) {
+    stop("Aucun patch avec label NDP0 trouve")
+  }
+
+  # Filtrer par pourcentage de foret
+  message("  Filtrage par couverture forestiere...")
+  keep <- logical(nrow(patch_list))
+  for (i in seq_len(nrow(patch_list))) {
+    lbl <- terra::rast(patch_list$label_path[i])
+    vals <- terra::values(lbl)
+    pct <- sum(vals < 9, na.rm = TRUE) / sum(!is.na(vals)) * 100
+    keep[i] <- pct >= min_forest_pct
+  }
+  n_skipped <- sum(!keep)
+  patch_list <- patch_list[keep, ]
+  message(sprintf("  %d patches forestiers (>= %d%%), %d ignores",
+                   nrow(patch_list), min_forest_pct, n_skipped))
+
+  # Limiter le nombre de patches si demande
+  if (!is.null(max_patches) && nrow(patch_list) > max_patches) {
+    set.seed(42)
+    patch_list <- patch_list[sample.int(nrow(patch_list), max_patches), ]
+    message(sprintf("  Limite a %d patches", max_patches))
+  }
+
+  # Split train/val
+  set.seed(42)
+  n_total <- nrow(patch_list)
+  val_idx <- sort(sample.int(n_total, size = round(n_total * val_ratio)))
+  patch_list$split <- "train"
+  patch_list$split[val_idx] <- "val"
+
+  # Creer les repertoires
+  for (sp in c("train", "val")) {
+    for (mod in c(modalites, "labels")) {
+      dir.create(file.path(output_dir, sp, mod), recursive = TRUE,
+                 showWarnings = FALSE)
+    }
+  }
+
+  # Copier/lier les fichiers
+  message("  Copie des patches...")
+  n_done <- 0L
+
+  for (i in seq_len(n_total)) {
+    pid <- patch_list$patch_id[i]
+    dom <- patch_list$domaine[i]
+    sp <- patch_list$split[i]
+    new_id <- sprintf("patch_%05d", i)
+
+    # Label
+    src_label <- patch_list$label_path[i]
+    dst_label <- file.path(output_dir, sp, "labels", paste0(new_id, ".tif"))
+    file.copy(src_label, dst_label, overwrite = TRUE)
+
+    # Modalites
+    for (mod in modalites) {
+      if (nchar(dom) > 0) {
+        src_mod <- file.path(flair_dir, mod, dom, paste0(pid, ".tif"))
+      } else {
+        src_mod <- file.path(flair_dir, mod, paste0(pid, ".tif"))
+      }
+
+      if (!file.exists(src_mod)) {
+        # Essayer sans le domaine (structure plate)
+        src_mod <- file.path(flair_dir, mod, paste0(pid, ".tif"))
+      }
+
+      if (file.exists(src_mod)) {
+        dst_mod <- file.path(output_dir, sp, mod, paste0(new_id, ".tif"))
+        file.copy(src_mod, dst_mod, overwrite = TRUE)
+      }
+    }
+
+    n_done <- n_done + 1L
+    if (n_done %% 200 == 0) {
+      message(sprintf("    %d / %d patches copies", n_done, n_total))
+    }
+  }
+
+  n_train <- sum(patch_list$split == "train")
+  n_val <- sum(patch_list$split == "val")
+
+  message(sprintf("\n=== Patches prets : %d train, %d val ===", n_train, n_val))
+  message(sprintf("  Sortie: %s/", output_dir))
+  message(sprintf("  Modalites: %s", paste(modalites, collapse = ", ")))
+  message("")
+  message("Pour lancer l'entrainement :")
+  message(sprintf("  python inst/python/train_segmentation.py \\"))
+  message(sprintf("    --checkpoint MAESTRO_pretrain.ckpt \\"))
+  message(sprintf("    --data-dir %s \\", output_dir))
+  message(sprintf("    --modalites %s \\", paste(modalites, collapse = ",")))
+  message(sprintf("    --epochs 50 --batch-size 8 --lr 1e-3 --gpu"))
+
+  invisible(list(n_train = n_train, n_val = n_val, n_skipped = n_skipped))
+}

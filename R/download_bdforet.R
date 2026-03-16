@@ -369,3 +369,207 @@ preparer_labels_ndp0 <- function(aoi, reference, output_dir = "outputs") {
   }
   rasteriser_bdforet(bdforet, reference, output_dir)
 }
+
+
+# =============================================================================
+# Labellisation des patches FLAIR-HUB avec BD Foret V2
+# =============================================================================
+
+#' Labelliser les patches FLAIR-HUB avec la BD Foret V2
+#'
+#' Pour chaque patch aerial FLAIR-HUB, telecharge les polygones BD Foret V2
+#' couvrant l'emprise du patch via WFS, et rasterise les codes NDP0 a la
+#' resolution du patch (0.2m, 250x250 px). Les labels sont sauvegardes dans
+#' un dossier `labels_ndp0/` parallele a `aerial/`.
+#'
+#' Les requetes WFS sont groupees par domaine (D001_2019, etc.) pour limiter
+#' le nombre d'appels au service.
+#'
+#' @param flair_dir Repertoire racine des donnees FLAIR-HUB
+#'   (ex: `"data/flair_hub"`)
+#' @param domaines Vecteur de domaines a traiter (`NULL` = tous les domaines
+#'   trouves). Ex: `c("D001_2019", "D013_2020")`
+#' @param overwrite Recalculer les labels existants (defaut: FALSE)
+#' @return data.frame avec les statistiques par domaine (n_patches, n_forest,
+#'   pct_forest)
+#' @export
+labelliser_flair_bdforet <- function(flair_dir = "data/flair_hub",
+                                      domaines = NULL,
+                                      overwrite = FALSE) {
+  message("=== Labellisation FLAIR-HUB avec BD Foret V2 (NDP0) ===")
+
+  aerial_dir <- file.path(flair_dir, "aerial")
+  if (!dir.exists(aerial_dir)) {
+    stop("Dossier aerial/ introuvable: ", aerial_dir)
+  }
+
+  # Detecter les domaines disponibles
+  if (is.null(domaines)) {
+    domaines <- list.dirs(aerial_dir, recursive = FALSE, full.names = FALSE)
+    if (length(domaines) == 0) {
+      # Pas de sous-dossiers domaine, les TIF sont directement dans aerial/
+      domaines <- ""
+    }
+  }
+  message(sprintf("  %d domaine(s) a traiter", length(domaines)))
+
+  stats <- data.frame(
+    domaine = character(0),
+    n_patches = integer(0),
+    n_labelled = integer(0),
+    n_forest = integer(0),
+    stringsAsFactors = FALSE
+  )
+
+  for (dom in domaines) {
+    # Trouver les patches aerial de ce domaine
+    if (nchar(dom) > 0) {
+      patch_dir <- file.path(aerial_dir, dom)
+      label_dir <- file.path(flair_dir, "labels_ndp0", dom)
+    } else {
+      patch_dir <- aerial_dir
+      label_dir <- file.path(flair_dir, "labels_ndp0")
+    }
+
+    tif_files <- list.files(patch_dir, pattern = "\\.tif$", full.names = TRUE)
+    if (length(tif_files) == 0) next
+
+    dir.create(label_dir, recursive = TRUE, showWarnings = FALSE)
+
+    dom_label <- if (nchar(dom) > 0) dom else "(racine)"
+    message(sprintf("\n--- Domaine %s : %d patches ---", dom_label, length(tif_files)))
+
+    # Calculer la bbox englobante de tous les patches du domaine
+    # pour faire UNE SEULE requete WFS par domaine
+    bbox_all <- NULL
+    for (tif in tif_files) {
+      r <- terra::rast(tif)
+      e <- terra::ext(r)
+      if (is.null(bbox_all)) {
+        bbox_all <- e
+      } else {
+        bbox_all <- terra::union(bbox_all, e)
+      }
+    }
+
+    # Creer un sf pour la bbox englobante du domaine
+    crs_str <- terra::crs(terra::rast(tif_files[1]))
+    bbox_poly <- sf::st_as_sfc(sf::st_bbox(c(
+      xmin = bbox_all[1], xmax = bbox_all[2],
+      ymin = bbox_all[3], ymax = bbox_all[4]
+    ), crs = sf::st_crs(crs_str)))
+    aoi_domaine <- sf::st_sf(geometry = bbox_poly)
+
+    # Telecharger la BD Foret V2 pour tout le domaine
+    cache_dir <- file.path(flair_dir, ".cache_bdforet")
+    dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
+    cache_path <- file.path(cache_dir, paste0("bdforet_", dom, ".gpkg"))
+
+    bdforet <- NULL
+    if (file.exists(cache_path)) {
+      message("  Cache BD Foret: ", cache_path)
+      bdforet <- sf::st_read(cache_path, quiet = TRUE)
+    } else {
+      bdforet <- tryCatch({
+        download_bdforet_for_aoi(aoi_domaine, cache_dir)
+      }, error = function(e) {
+        warning(sprintf("  Echec WFS pour domaine %s: %s", dom_label, e$message))
+        NULL
+      })
+      if (!is.null(bdforet)) {
+        sf::st_write(bdforet, cache_path, delete_dsn = TRUE, quiet = TRUE)
+      }
+    }
+
+    # Rasteriser patch par patch
+    n_labelled <- 0L
+    n_forest <- 0L
+
+    for (tif in tif_files) {
+      patch_name <- tools::file_path_sans_ext(basename(tif))
+      label_path <- file.path(label_dir, paste0(patch_name, ".tif"))
+
+      if (file.exists(label_path) && !overwrite) {
+        n_labelled <- n_labelled + 1L
+        # Compter la foret dans le label existant
+        lbl <- terra::rast(label_path)
+        vals <- terra::values(lbl)
+        if (sum(vals < 9, na.rm = TRUE) / length(vals) > 0.05) {
+          n_forest <- n_forest + 1L
+        }
+        next
+      }
+
+      # Lire l'emprise du patch aerial
+      ref <- terra::rast(tif)
+      ext_patch <- terra::ext(ref)
+
+      # Creer le raster label (250x250 px, 0.2m)
+      label_rast <- terra::rast(
+        xmin = ext_patch[1], xmax = ext_patch[2],
+        ymin = ext_patch[3], ymax = ext_patch[4],
+        nrows = terra::nrow(ref), ncols = terra::ncol(ref),
+        crs = terra::crs(ref)
+      )
+      terra::values(label_rast) <- 9L  # Non-foret par defaut
+
+      if (!is.null(bdforet) && nrow(bdforet) > 0) {
+        # Clipper les polygones BD Foret sur l'emprise du patch
+        patch_bbox <- sf::st_as_sfc(sf::st_bbox(c(
+          xmin = ext_patch[1], xmax = ext_patch[2],
+          ymin = ext_patch[3], ymax = ext_patch[4]
+        ), crs = sf::st_crs(terra::crs(ref))))
+
+        patch_bdforet <- tryCatch({
+          sf::st_intersection(bdforet, patch_bbox)
+        }, error = function(e) NULL)
+
+        if (!is.null(patch_bdforet) && nrow(patch_bdforet) > 0) {
+          # Rasteriser les polygones par code NDP0
+          bdforet_vect <- terra::vect(patch_bdforet)
+          codes <- sort(unique(patch_bdforet$code_ndp0), decreasing = TRUE)
+          for (code in codes) {
+            mask_poly <- bdforet_vect[bdforet_vect$code_ndp0 == code, ]
+            if (length(mask_poly) == 0) next
+            layer <- terra::rasterize(mask_poly, label_rast, field = "code_ndp0")
+            valid <- !is.na(terra::values(layer))
+            vals <- terra::values(label_rast)
+            vals[valid] <- terra::values(layer)[valid]
+            terra::values(label_rast) <- vals
+          }
+        }
+      }
+
+      names(label_rast) <- "classe_ndp0"
+      terra::writeRaster(label_rast, label_path, overwrite = TRUE,
+                         datatype = "INT1U", gdal = c("COMPRESS=LZW"))
+
+      n_labelled <- n_labelled + 1L
+      vals <- terra::values(label_rast)
+      if (sum(vals < 9, na.rm = TRUE) / length(vals) > 0.05) {
+        n_forest <- n_forest + 1L
+      }
+
+      if (n_labelled %% 50 == 0) {
+        message(sprintf("    %d / %d patches labellises", n_labelled, length(tif_files)))
+      }
+    }
+
+    pct <- if (n_labelled > 0) round(n_forest / n_labelled * 100, 1) else 0
+    message(sprintf("  Domaine %s: %d labellises, %d forestiers (%.1f%%)",
+                     dom_label, n_labelled, n_forest, pct))
+
+    stats <- rbind(stats, data.frame(
+      domaine = dom_label,
+      n_patches = length(tif_files),
+      n_labelled = n_labelled,
+      n_forest = n_forest,
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  message(sprintf("\n=== Total: %d patches labellises, %d forestiers ===",
+                   sum(stats$n_labelled), sum(stats$n_forest)))
+
+  invisible(stats)
+}
