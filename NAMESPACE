@@ -73,6 +73,9 @@ export(labelliser_flair_bdforet)
 export(preparer_flair_segmentation)
 
 # --- Telechargement FLAIR-HUB dataset ---
+export(lister_domaines_flair)
+export(domaines_recommandes_segmentation)
+export(download_flair_segmentation)
 export(hf_list_files)
 export(hf_download_file)
 export(download_flair_subset)

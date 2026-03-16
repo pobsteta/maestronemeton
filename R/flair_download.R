@@ -123,6 +123,186 @@ download_flair_subset <- function(modalite, domaine = NULL,
   downloaded
 }
 
+#' Lister les domaines FLAIR-HUB disponibles
+#'
+#' Interroge l'API HuggingFace pour lister les domaines geographiques
+#' disponibles dans le dataset FLAIR-HUB. Chaque domaine correspond
+#' a un departement francais + annee (ex: D001_2019 = Ain 2019).
+#'
+#' @param repo_id Identifiant du repository HuggingFace
+#' @param token Token HuggingFace (optionnel)
+#' @return data.frame avec colonnes domaine, departement, annee
+#' @export
+lister_domaines_flair <- function(repo_id = "IGNF/FLAIR-HUB",
+                                    token = NULL) {
+  # Mapping des numeros de departement vers les noms
+  deps <- c(
+    "001" = "Ain", "002" = "Aisne", "003" = "Allier",
+    "004" = "Alpes-de-Haute-Provence", "005" = "Hautes-Alpes",
+    "006" = "Alpes-Maritimes", "007" = "Ardeche", "008" = "Ardennes",
+    "009" = "Ariege", "010" = "Aube", "011" = "Aude",
+    "012" = "Aveyron", "013" = "Bouches-du-Rhone", "014" = "Calvados",
+    "015" = "Cantal", "016" = "Charente", "017" = "Charente-Maritime",
+    "018" = "Cher", "019" = "Correze", "021" = "Cote-d'Or",
+    "022" = "Cotes-d'Armor", "023" = "Creuse", "024" = "Dordogne",
+    "025" = "Doubs", "026" = "Drome", "027" = "Eure",
+    "028" = "Eure-et-Loir", "029" = "Finistere", "030" = "Gard",
+    "031" = "Haute-Garonne", "032" = "Gers", "033" = "Gironde",
+    "034" = "Herault", "035" = "Ille-et-Vilaine", "036" = "Indre",
+    "037" = "Indre-et-Loire", "038" = "Isere", "039" = "Jura",
+    "040" = "Landes", "041" = "Loir-et-Cher", "042" = "Loire",
+    "043" = "Haute-Loire", "044" = "Loire-Atlantique", "045" = "Loiret",
+    "046" = "Lot", "047" = "Lot-et-Garonne", "048" = "Lozere",
+    "049" = "Maine-et-Loire", "050" = "Manche", "051" = "Marne",
+    "052" = "Haute-Marne", "053" = "Mayenne", "054" = "Meurthe-et-Moselle",
+    "055" = "Meuse", "056" = "Morbihan", "057" = "Moselle",
+    "058" = "Nievre", "059" = "Nord", "060" = "Oise",
+    "061" = "Orne", "062" = "Pas-de-Calais", "063" = "Puy-de-Dome",
+    "064" = "Pyrenees-Atlantiques", "065" = "Hautes-Pyrenees",
+    "066" = "Pyrenees-Orientales", "067" = "Bas-Rhin", "068" = "Haut-Rhin",
+    "069" = "Rhone", "070" = "Haute-Saone", "071" = "Saone-et-Loire",
+    "072" = "Sarthe", "073" = "Savoie", "074" = "Haute-Savoie",
+    "075" = "Paris", "076" = "Seine-Maritime", "077" = "Seine-et-Marne",
+    "078" = "Yvelines", "079" = "Deux-Sevres", "080" = "Somme",
+    "081" = "Tarn", "082" = "Tarn-et-Garonne", "083" = "Var",
+    "084" = "Vaucluse", "085" = "Vendee", "086" = "Vienne",
+    "087" = "Haute-Vienne", "088" = "Vosges", "089" = "Yonne",
+    "090" = "Territoire de Belfort", "091" = "Essonne",
+    "092" = "Hauts-de-Seine", "093" = "Seine-Saint-Denis",
+    "094" = "Val-de-Marne", "095" = "Val-d'Oise"
+  )
+
+  # Lister les sous-dossiers du dossier aerial/
+  files <- hf_list_files(repo_id, path = "aerial", token = token)
+  if (length(files) == 0) {
+    warning("Impossible de lister les domaines FLAIR-HUB")
+    return(data.frame())
+  }
+
+  # Extraire les noms de domaine (D001_2019, D013_2020, ...)
+  domaines <- unique(dirname(sub("^aerial/", "", files)))
+  domaines <- domaines[grepl("^D[0-9]{3}_[0-9]{4}$", domaines)]
+  domaines <- sort(domaines)
+
+  # Construire le data.frame
+  result <- data.frame(
+    domaine = domaines,
+    numero_dep = sub("^D([0-9]{3})_.*", "\\1", domaines),
+    annee = as.integer(sub("^D[0-9]{3}_([0-9]{4})$", "\\1", domaines)),
+    stringsAsFactors = FALSE
+  )
+  result$departement <- deps[result$numero_dep]
+  result$departement[is.na(result$departement)] <- "?"
+
+  message(sprintf("  %d domaines FLAIR-HUB disponibles", nrow(result)))
+  result
+}
+
+
+#' Domaines FLAIR-HUB recommandes pour l'entrainement segmentation
+#'
+#' Retourne une selection de domaines couvrant une diversite d'essences
+#' forestieres (chenes, hetres, pins, sapins, douglas, chataigniers, etc.)
+#' repartis sur differentes regions de France.
+#'
+#' @param niveau Niveau de couverture : "minimal" (5 domaines, ~500 patches),
+#'   "standard" (10 domaines, ~1000 patches), "complet" (20 domaines,
+#'   ~2000 patches)
+#' @return Vecteur de noms de domaines
+#' @export
+domaines_recommandes_segmentation <- function(niveau = "standard") {
+  # Selection basee sur la couverture des 10 classes NDP0 :
+  # - Chene : largement distribue (Centre, Ouest, Sud-Ouest)
+  # - Hetre : Nord-Est, montagnes
+  # - Chataignier : Massif Central, Perigord, Corse
+  # - Pin maritime : Landes, Gironde
+  # - Pin sylvestre : Massif Central, Alpes
+  # - Epicea/Sapin : Vosges, Jura, Alpes
+  # - Douglas : Massif Central
+  # - Meleze : Alpes du Sud
+  # - Peuplier : vallees fluviales (Loire, Garonne)
+
+  minimal <- c(
+    "D033_2020",  # Gironde     : pin maritime, chene
+    "D063_2019",  # Puy-de-Dome : douglas, hetre, epicea
+    "D088_2019",  # Vosges      : epicea, sapin, hetre
+    "D024_2020",  # Dordogne    : chataignier, chene
+    "D077_2020"   # Seine-et-Marne : chene, hetre (Fontainebleau)
+  )
+
+  standard <- c(
+    minimal,
+    "D040_2020",  # Landes      : pin maritime
+    "D039_2019",  # Jura        : epicea, sapin, hetre
+    "D019_2019",  # Correze     : chataignier, hetre, douglas
+    "D005_2019",  # Hautes-Alpes: meleze, pin sylvestre
+    "D045_2019"   # Loiret      : chene, pin sylvestre, peuplier
+  )
+
+  complet <- c(
+    standard,
+    "D048_2019",  # Lozere      : pin sylvestre, hetre, epicea
+    "D038_2020",  # Isere       : epicea, sapin, hetre
+    "D015_2019",  # Cantal      : hetre, epicea, douglas
+    "D057_2019",  # Moselle     : hetre, chene
+    "D073_2019",  # Savoie      : epicea, meleze
+    "D047_2020",  # Lot-et-Garonne : chene, peuplier
+    "D012_2019",  # Aveyron     : chene, pin sylvestre, hetre
+    "D067_2019",  # Bas-Rhin    : hetre, sapin, chene
+    "D081_2020",  # Tarn        : chene, chataignier, douglas
+    "D007_2019"   # Ardeche     : chataignier, pin, chene
+  )
+
+  domaines <- switch(niveau,
+    minimal  = minimal,
+    standard = standard,
+    complet  = complet,
+    stop("Niveau inconnu: '", niveau, "'. Utilisez 'minimal', 'standard' ou 'complet'")
+  )
+
+  message(sprintf("  %d domaines recommandes (niveau '%s')", length(domaines), niveau))
+  message(sprintf("  Domaines: %s", paste(domaines, collapse = ", ")))
+  domaines
+}
+
+
+#' Telecharger les domaines FLAIR-HUB recommandes pour la segmentation
+#'
+#' Telecharge les patches FLAIR-HUB (aerial + modalites choisies) pour
+#' les domaines recommandes, couvrant une diversite d'essences forestieres.
+#'
+#' @param niveau Niveau de couverture : "minimal", "standard", "complet"
+#' @param modalites Modalites a telecharger (defaut: `c("aerial", "dem")`)
+#' @param data_dir Repertoire de destination
+#' @param token Token HuggingFace (optionnel)
+#' @return Vecteur de domaines telecharges
+#' @export
+download_flair_segmentation <- function(niveau = "standard",
+                                          modalites = c("aerial", "dem"),
+                                          data_dir = "data/flair_hub",
+                                          token = NULL) {
+  domaines <- domaines_recommandes_segmentation(niveau)
+
+  message(sprintf("\n=== Telechargement FLAIR-HUB : %d domaines x %d modalites ===",
+                   length(domaines), length(modalites)))
+
+  for (dom in domaines) {
+    for (mod in modalites) {
+      tryCatch(
+        download_flair_subset(mod, domaine = dom, data_dir = data_dir,
+                               token = token),
+        error = function(e) {
+          warning(sprintf("Echec %s/%s: %s", mod, dom, e$message))
+        }
+      )
+    }
+  }
+
+  message(sprintf("\n=== Telechargement termine : %s/ ===", data_dir))
+  invisible(domaines)
+}
+
+
 #' Telecharger le toy dataset FLAIR-HUB
 #'
 #' Telecharge un petit jeu de donnees d'exemple pour tester le pipeline.
