@@ -448,7 +448,7 @@ labelliser_flair_bdforet <- function(flair_dir = "data/flair_hub",
       r <- tryCatch(terra::rast(tif), error = function(e) NULL)
       if (is.null(r)) next
       e <- terra::ext(r)
-      ext_vals <- as.vector(e)
+      ext_vals <- c(e[1], e[2], e[3], e[4])
       if (anyNA(ext_vals) || any(!is.finite(ext_vals))) {
         warning(sprintf("  Patch ignore (extent invalide): %s", basename(tif)))
         next
