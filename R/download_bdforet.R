@@ -129,7 +129,7 @@ tfv_to_ndp0 <- function(code_tfv) {
 #' @export
 download_bdforet_for_aoi <- function(aoi, output_dir,
                                       wfs_url = "https://data.geopf.fr/wfs/ows",
-                                      layer_name = "BDFORET_V2:formation_vegetale") {
+                                      layer_name = "LANDCOVER.FORESTINVENTORY.V2:formation_vegetale") {
   message("=== Telechargement BD Foret V2 via WFS ===")
 
   cache_path <- file.path(output_dir, "bdforet_v2.gpkg")
@@ -144,67 +144,138 @@ download_bdforet_for_aoi <- function(aoi, output_dir,
   # Bbox en WGS84 pour la requete WFS
   aoi_wgs84 <- sf::st_transform(aoi, 4326)
   bbox_wgs84 <- sf::st_bbox(aoi_wgs84)
-  bbox_str <- sprintf("%f,%f,%f,%f,EPSG:4326",
-                       bbox_wgs84["ymin"], bbox_wgs84["xmin"],
-                       bbox_wgs84["ymax"], bbox_wgs84["xmax"])
 
-  # Construire l'URL GetFeature
-  wfs_params <- list(
-    SERVICE = "WFS",
-    VERSION = "2.0.0",
-    REQUEST = "GetFeature",
-    TYPENAMES = layer_name,
-    BBOX = bbox_str,
-    OUTPUTFORMAT = "application/json",
-    COUNT = "50000"
-  )
-  query_str <- paste(names(wfs_params), wfs_params, sep = "=", collapse = "&")
-  url <- paste0(wfs_url, "?", query_str)
+  # Decoupe spatiale : si la bbox depasse ~0.5 degre dans une dimension,
+ # on la fractionne en tuiles pour eviter les timeouts 504 du WFS
+  bbox_width <- bbox_wgs84["xmax"] - bbox_wgs84["xmin"]
+  bbox_height <- bbox_wgs84["ymax"] - bbox_wgs84["ymin"]
+  tile_size <- 0.5  # degres
+
+  tiles <- list()
+  x_breaks <- seq(bbox_wgs84["xmin"], bbox_wgs84["xmax"], by = tile_size)
+  if (tail(x_breaks, 1) < bbox_wgs84["xmax"]) x_breaks <- c(x_breaks, bbox_wgs84["xmax"])
+  y_breaks <- seq(bbox_wgs84["ymin"], bbox_wgs84["ymax"], by = tile_size)
+  if (tail(y_breaks, 1) < bbox_wgs84["ymax"]) y_breaks <- c(y_breaks, bbox_wgs84["ymax"])
+
+  for (i in seq_len(length(x_breaks) - 1)) {
+    for (j in seq_len(length(y_breaks) - 1)) {
+      tiles <- c(tiles, list(c(
+        xmin = x_breaks[i], xmax = x_breaks[i + 1],
+        ymin = y_breaks[j], ymax = y_breaks[j + 1]
+      )))
+    }
+  }
+
+  n_tiles <- length(tiles)
+  if (n_tiles > 1) {
+    message(sprintf("  Bbox large (%.2f x %.2f deg) -> decoupe en %d tuiles",
+                     bbox_width, bbox_height, n_tiles))
+  }
+
+  # Couches a essayer, dans l'ordre
+  all_layers <- unique(c(
+    layer_name,
+    "LANDCOVER.FORESTINVENTORY.V2:formation_vegetale",
+    "BDFORET_V2:formation_vegetale"
+  ))
 
   message(sprintf("  Couche WFS: %s", layer_name))
   message(sprintf("  Bbox: %.4f, %.4f, %.4f, %.4f (WGS84)",
                    bbox_wgs84["xmin"], bbox_wgs84["ymin"],
                    bbox_wgs84["xmax"], bbox_wgs84["ymax"]))
 
-  # Telecharger via curl WFS direct
-  bdforet <- NULL
-  tmp_geojson <- tempfile(fileext = ".geojson")
-  wfs_ok <- tryCatch({
-    h <- curl::new_handle()
-    curl::handle_setopt(h, followlocation = TRUE, timeout = 120L)
-    curl::curl_download(url, tmp_geojson, handle = h)
-    TRUE
-  }, error = function(e) {
-    # Essayer d'autres noms de couche
-    alt_layers <- c(
-      "LANDUSE.FORESTINVENTORY.V2:formation_vegetale",
-      "bdforet_v2:formation_vegetale",
-      "IGNF_BDFORET_V2:formation_vegetale"
-    )
-    for (alt in alt_layers) {
-      message(sprintf("  Essai couche alternative: %s", alt))
-      alt_params <- wfs_params
-      alt_params$TYPENAMES <- alt
-      alt_query <- paste(names(alt_params), alt_params, sep = "=", collapse = "&")
-      alt_url <- paste0(wfs_url, "?", alt_query)
-      ok <- tryCatch({
-        curl::curl_download(alt_url, tmp_geojson, handle = h)
-        TRUE
-      }, error = function(e2) FALSE)
-      if (ok) return(TRUE)
-    }
-    message(sprintf("  WFS direct echoue: %s", e$message))
-    FALSE
-  })
+  # Fonction helper : telecharger une tuile WFS avec retry + backoff
+  download_tile_wfs <- function(tile_bbox, layers, wfs_url, max_retries = 3) {
+    bbox_str <- sprintf("%f,%f,%f,%f,EPSG:4326",
+                         tile_bbox["ymin"], tile_bbox["xmin"],
+                         tile_bbox["ymax"], tile_bbox["xmax"])
 
-  if (wfs_ok) {
+    for (lyr in layers) {
+      wfs_params <- list(
+        SERVICE = "WFS",
+        VERSION = "2.0.0",
+        REQUEST = "GetFeature",
+        TYPENAMES = lyr,
+        BBOX = bbox_str,
+        OUTPUTFORMAT = "application/json",
+        COUNT = "50000"
+      )
+      query_str <- paste(names(wfs_params), wfs_params, sep = "=", collapse = "&")
+      url <- paste0(wfs_url, "?", query_str)
+
+      for (attempt in seq_len(max_retries)) {
+        tmp_geojson <- tempfile(fileext = ".geojson")
+        result <- tryCatch({
+          h <- curl::new_handle()
+          curl::handle_setopt(h, followlocation = TRUE, timeout = 300L)
+          curl::curl_download(url, tmp_geojson, handle = h)
+          # Verifier que le fichier n'est pas une erreur HTTP
+          content <- readLines(tmp_geojson, n = 5, warn = FALSE)
+          content_str <- paste(content, collapse = " ")
+          if (grepl("ExceptionReport|ServiceException|404|502|503|504",
+                    content_str, ignore.case = TRUE)) {
+            unlink(tmp_geojson)
+            list(status = "server_error", layer = lyr)
+          } else {
+            sf_data <- sf::st_read(tmp_geojson, quiet = TRUE)
+            unlink(tmp_geojson)
+            list(status = "ok", data = sf_data, layer = lyr)
+          }
+        }, error = function(e) {
+          unlink(tmp_geojson)
+          list(status = "error", message = e$message, layer = lyr)
+        })
+
+        if (result$status == "ok") return(result)
+
+        if (result$status == "server_error") {
+          if (attempt < max_retries) {
+            wait <- 2^attempt
+            message(sprintf("    Erreur serveur (couche %s), retry dans %ds...", lyr, wait))
+            Sys.sleep(wait)
+          }
+          next
+        }
+
+        # Erreur reseau : retry avec backoff
+        if (attempt < max_retries) {
+          wait <- 2^attempt
+          message(sprintf("    Erreur reseau (attempt %d/%d), retry dans %ds...",
+                           attempt, max_retries, wait))
+          Sys.sleep(wait)
+        }
+      }
+    }
+    list(status = "failed")
+  }
+
+  # Telecharger toutes les tuiles
+  all_bdforet <- list()
+  for (k in seq_along(tiles)) {
+    tile <- tiles[[k]]
+    if (n_tiles > 1) {
+      message(sprintf("  Tuile %d/%d [%.4f,%.4f - %.4f,%.4f]",
+                       k, n_tiles, tile["xmin"], tile["ymin"],
+                       tile["xmax"], tile["ymax"]))
+    }
+    result <- download_tile_wfs(tile, all_layers, wfs_url)
+    if (result$status == "ok" && inherits(result$data, "sf") && nrow(result$data) > 0) {
+      all_bdforet <- c(all_bdforet, list(result$data))
+      if (k == 1 && result$layer != layer_name) {
+        message(sprintf("  Couche fonctionnelle: %s", result$layer))
+      }
+    }
+  }
+
+  # Combiner les tuiles
+  bdforet <- NULL
+  if (length(all_bdforet) > 0) {
     bdforet <- tryCatch({
-      sf::st_read(tmp_geojson, quiet = TRUE)
+      do.call(rbind, all_bdforet)
     }, error = function(e) {
-      message(sprintf("  Erreur lecture GeoJSON: %s", e$message))
-      NULL
+      message(sprintf("  Erreur combinaison tuiles: %s", e$message))
+      all_bdforet[[1]]
     })
-    unlink(tmp_geojson)
   }
 
   # Fallback: utiliser happign::get_wfs() si disponible
@@ -217,17 +288,41 @@ download_bdforet_for_aoi <- function(aoi, output_dir,
     message("  >>> Basculement sur happign::get_wfs() pour telecharger la BD Foret V2 <<<")
     happign_layers <- c(
       "LANDCOVER.FORESTINVENTORY.V2:formation_vegetale",
-      "LANDUSE.FORESTINVENTORY.V2:formation_vegetale",
       "BDFORET_V2:formation_vegetale"
     )
     for (lyr in happign_layers) {
       message(sprintf("  Essai happign couche: %s", lyr))
-      bdforet <- tryCatch({
-        happign::get_wfs(x = aoi_wgs84, layer = lyr)
-      }, error = function(e) {
-        message(sprintf("    Echec: %s", e$message))
-        NULL
-      })
+      # Pour happign aussi, decoupe si l'AOI est grande
+      if (n_tiles > 1) {
+        tile_results <- list()
+        for (k in seq_along(tiles)) {
+          tile <- tiles[[k]]
+          tile_sf <- sf::st_as_sfc(sf::st_bbox(
+            c(xmin = tile["xmin"], ymin = tile["ymin"],
+              xmax = tile["xmax"], ymax = tile["ymax"]),
+            crs = sf::st_crs(4326)
+          ))
+          tile_data <- tryCatch({
+            happign::get_wfs(x = tile_sf, layer = lyr)
+          }, error = function(e) {
+            message(sprintf("    Tuile %d echec: %s", k, e$message))
+            NULL
+          })
+          if (!is.null(tile_data) && inherits(tile_data, "sf") && nrow(tile_data) > 0) {
+            tile_results <- c(tile_results, list(tile_data))
+          }
+        }
+        if (length(tile_results) > 0) {
+          bdforet <- tryCatch(do.call(rbind, tile_results), error = function(e) NULL)
+        }
+      } else {
+        bdforet <- tryCatch({
+          happign::get_wfs(x = aoi_wgs84, layer = lyr)
+        }, error = function(e) {
+          message(sprintf("    Echec: %s", e$message))
+          NULL
+        })
+      }
       if (!is.null(bdforet) && inherits(bdforet, "sf") && nrow(bdforet) > 0) {
         message(sprintf("  happign: %d polygones telecharges via %s", nrow(bdforet), lyr))
         break
