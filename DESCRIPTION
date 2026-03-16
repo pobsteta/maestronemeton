@@ -28,13 +28,13 @@ Imports:
     fs,
     jsonlite,
     reticulate,
-    rstac
+    rstac,
+    happign
 Suggests:
     ggplot2,
     patchwork,
     scales,
     hfhub,
-    happign,
     optparse,
     rmarkdown,
     knitr,
