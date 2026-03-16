@@ -214,7 +214,7 @@ download_bdforet_for_aoi <- function(aoi, output_dir,
            "Installez-le avec: install.packages('happign')\n",
            "Ou telechargez manuellement depuis https://geoservices.ign.fr/bdforet")
     }
-    message("  Fallback: telechargement via happign::get_wfs()")
+    message("  >>> Basculement sur happign::get_wfs() pour telecharger la BD Foret V2 <<<")
     happign_layers <- c(
       "LANDCOVER.FORESTINVENTORY.V2:formation_vegetale",
       "LANDUSE.FORESTINVENTORY.V2:formation_vegetale",
