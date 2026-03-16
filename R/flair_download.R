@@ -171,6 +171,13 @@ download_flair_subset <- function(modalite, domaine = NULL,
   tifs <- list.files(extract_dir, pattern = "\\.tif$", recursive = TRUE)
   message(sprintf("  %d fichiers TIF extraits", length(tifs)))
 
+  # Supprimer le ZIP pour liberer l'espace disque
+  if (file.exists(zip_path)) {
+    zip_size <- file.size(zip_path) / 1e6
+    unlink(zip_path)
+    message(sprintf("  ZIP supprime: %s (%.0f Mo liberes)", basename(zip_path), zip_size))
+  }
+
   invisible(extract_dir)
 }
 
