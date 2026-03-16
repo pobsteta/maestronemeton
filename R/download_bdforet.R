@@ -431,7 +431,8 @@ labelliser_flair_bdforet <- function(flair_dir = "data/flair_hub",
       label_dir <- file.path(flair_dir, "labels_ndp0")
     }
 
-    tif_files <- list.files(patch_dir, pattern = "\\.tif$", full.names = TRUE)
+    tif_files <- list.files(patch_dir, pattern = "\\.tif$", full.names = TRUE,
+                            recursive = TRUE)
     if (length(tif_files) == 0) next
 
     dir.create(label_dir, recursive = TRUE, showWarnings = FALSE)
@@ -442,14 +443,27 @@ labelliser_flair_bdforet <- function(flair_dir = "data/flair_hub",
     # Calculer la bbox englobante de tous les patches du domaine
     # pour faire UNE SEULE requete WFS par domaine
     bbox_all <- NULL
+    valid_tifs <- character(0)
     for (tif in tif_files) {
-      r <- terra::rast(tif)
+      r <- tryCatch(terra::rast(tif), error = function(e) NULL)
+      if (is.null(r)) next
       e <- terra::ext(r)
+      ext_vals <- as.vector(e)
+      if (anyNA(ext_vals) || any(!is.finite(ext_vals))) {
+        warning(sprintf("  Patch ignore (extent invalide): %s", basename(tif)))
+        next
+      }
+      valid_tifs <- c(valid_tifs, tif)
       if (is.null(bbox_all)) {
         bbox_all <- e
       } else {
         bbox_all <- terra::union(bbox_all, e)
       }
+    }
+    tif_files <- valid_tifs
+    if (length(tif_files) == 0 || is.null(bbox_all)) {
+      warning(sprintf("  Domaine %s: aucun patch valide, ignore", dom_label))
+      next
     }
 
     # Creer un sf pour la bbox englobante du domaine
