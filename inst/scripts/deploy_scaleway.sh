@@ -66,6 +66,7 @@ LR="1e-3"
 MODALITES="aerial"
 UNFREEZE=""
 SEGMENTATION=false
+FLAIR_NIVEAU=""
 AOI_LOCAL=""
 DRY_RUN=false
 
@@ -81,6 +82,7 @@ while [[ $# -gt 0 ]]; do
         --modalites)     MODALITES="$2"; shift 2 ;;
         --unfreeze)      UNFREEZE="--unfreeze"; shift ;;
         --segmentation)  SEGMENTATION=true; shift ;;
+        --flair)         FLAIR_NIVEAU="$2"; SEGMENTATION=true; shift 2 ;;
         --aoi)           AOI_LOCAL="$2"; shift 2 ;;
         --name)          INSTANCE_NAME="$2"; shift 2 ;;
         --dry-run)       DRY_RUN=true; shift ;;
@@ -108,6 +110,9 @@ echo "  Learning rate : $LR"
 echo "  Modalites     : $MODALITES"
 echo "  Unfreeze      : ${UNFREEZE:-non}"
 echo "  Mode          : $(if $SEGMENTATION; then echo 'segmentation NDP0'; else echo 'classification TreeSatAI'; fi)"
+if [ -n "$FLAIR_NIVEAU" ]; then
+echo "  FLAIR niveau  : $FLAIR_NIVEAU"
+fi
 if [ -n "$AOI_LOCAL" ]; then
 echo "  AOI locale    : $AOI_LOCAL"
 fi
@@ -171,13 +176,15 @@ if $DRY_RUN; then
     echo "# 4. Copier et lancer le script d'entrainement"
     if $SEGMENTATION; then
     echo "scp inst/scripts/cloud_train_segmentation.sh root@\$IP:~/"
-    if [ -n "$AOI_LOCAL" ]; then
+    if [ -n "$FLAIR_NIVEAU" ]; then
+    echo "ssh root@\$IP 'FLAIR_NIVEAU=$FLAIR_NIVEAU EPOCHS=$EPOCHS BATCH_SIZE=$BATCH_SIZE LR=$LR MODALITES=$MODALITES bash ~/cloud_train_segmentation.sh'"
+    elif [ -n "$AOI_LOCAL" ]; then
     echo "scp $AOI_LOCAL root@\$IP:/data/aoi.gpkg"
-    echo "ssh root@\$IP 'AOI_PATH=/data/aoi.gpkg EPOCHS=$EPOCHS BATCH_SIZE=$BATCH_SIZE MODALITES=$MODALITES bash ~/cloud_train_segmentation.sh'"
+    echo "ssh root@\$IP 'AOI_PATH=/data/aoi.gpkg EPOCHS=$EPOCHS BATCH_SIZE=$BATCH_SIZE LR=$LR MODALITES=$MODALITES bash ~/cloud_train_segmentation.sh'"
     else
     echo "# Upload des patches prepares :"
     echo "scp -r data/segmentation/ root@\$IP:/data/segmentation/"
-    echo "ssh root@\$IP 'EPOCHS=$EPOCHS BATCH_SIZE=$BATCH_SIZE MODALITES=$MODALITES bash ~/cloud_train_segmentation.sh'"
+    echo "ssh root@\$IP 'EPOCHS=$EPOCHS BATCH_SIZE=$BATCH_SIZE LR=$LR MODALITES=$MODALITES bash ~/cloud_train_segmentation.sh'"
     fi
     echo ""
     echo "# 5. Recuperer le decodeur"
@@ -277,14 +284,16 @@ fi
 log_info "Lancement de l'entrainement dans tmux..."
 
 if $SEGMENTATION; then
-    AOI_ENV=""
-    if [ -n "$AOI_LOCAL" ]; then
-        AOI_ENV="export AOI_PATH=/data/aoi.gpkg"
+    EXTRA_ENV=""
+    if [ -n "$FLAIR_NIVEAU" ]; then
+        EXTRA_ENV="export FLAIR_NIVEAU=$FLAIR_NIVEAU"
+    elif [ -n "$AOI_LOCAL" ]; then
+        EXTRA_ENV="export AOI_PATH=/data/aoi.gpkg"
     fi
     ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" bash -c "'
         apt-get update -qq && apt-get install -y -qq tmux > /dev/null 2>&1
         tmux new-session -d -s maestro \"
-            $AOI_ENV
+            $EXTRA_ENV
             export EPOCHS=$EPOCHS
             export BATCH_SIZE=$BATCH_SIZE
             export LR=$LR

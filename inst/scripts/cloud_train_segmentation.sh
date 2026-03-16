@@ -12,15 +12,20 @@
 # est entraine, ce qui est rapide meme sur un GPU modeste.
 #
 # Usage (sur l'instance GPU) :
-#   # Mode 1 : avec un AOI (prepare les patches sur l'instance)
+#   # Mode 1 : FLAIR-HUB (telecharge, labellise, entraine - RECOMMANDE)
+#   FLAIR_NIVEAU=complet bash cloud_train_segmentation.sh
+#
+#   # Mode 2 : avec un AOI (prepare les patches sur l'instance)
 #   AOI_PATH=/data/aoi.gpkg bash cloud_train_segmentation.sh
 #
-#   # Mode 2 : patches deja prepares (upload via scp)
+#   # Mode 3 : patches deja prepares (upload via scp)
 #   DATA_DIR=/data/segmentation bash cloud_train_segmentation.sh
 #
-# Variables d'environnement (toutes optionnelles sauf AOI_PATH ou DATA_DIR) :
-#   AOI_PATH=...             GeoPackage de l'AOI (pour preparer les patches)
-#   DATA_DIR=...             Repertoire des patches pre-prepares
+# Variables d'environnement (toutes optionnelles) :
+#   FLAIR_NIVEAU=complet     Niveau FLAIR-HUB: minimal (5 dom), standard (10),
+#                            complet (20). Si defini, telecharge+labellise+entraine
+#   AOI_PATH=...             GeoPackage de l'AOI (mode 2, ignore si FLAIR_NIVEAU)
+#   DATA_DIR=...             Repertoire des patches pre-prepares (mode 3)
 #   EPOCHS=50                Nombre d'epochs
 #   BATCH_SIZE=8             Taille batch (8-16 selon VRAM)
 #   LR=1e-3                  Learning rate
@@ -119,8 +124,10 @@ else
     OUTPUT_DIR="${OUTPUT_DIR:-$WORK_DIR/outputs/segmentation}"
 fi
 
+FLAIR_NIVEAU="${FLAIR_NIVEAU:-}"
 AOI_PATH="${AOI_PATH:-}"
 DATA_DIR="${DATA_DIR:-$DEFAULT_DATA_DIR}"
+FLAIR_DIR="${FLAIR_DIR:-${DEFAULT_DATA_DIR%/*}/flair_hub}"
 EPOCHS="${EPOCHS:-50}"
 BATCH_SIZE="${BATCH_SIZE:-8}"
 LR="${LR:-1e-3}"
@@ -192,14 +199,8 @@ print(path)
 ")
 echo "Checkpoint: $CHECKPOINT"
 
-# --- Preparer les patches si AOI fourni ---
-if [ -n "$AOI_PATH" ] && [ ! -d "$DATA_DIR/train/aerial" ]; then
-    echo ""
-    echo "=== Preparation des patches d'entrainement ==="
-    echo "  AOI: $AOI_PATH"
-    echo "  Sortie: $DATA_DIR"
-
-    # Installer R et les packages necessaires
+# --- Installer R si necessaire (pour FLAIR-HUB ou AOI) ---
+install_r_deps() {
     if ! command -v Rscript &>/dev/null; then
         echo "  Installation de R..."
         apt-get update -qq
@@ -207,19 +208,67 @@ if [ -n "$AOI_PATH" ] && [ ! -d "$DATA_DIR/train/aerial" ]; then
             libsqlite3-dev libcurl4-openssl-dev libssl-dev 2>/dev/null
     fi
 
-    # Installer les packages R necessaires
     Rscript -e "
-    pkgs <- c('sf', 'terra', 'curl', 'reticulate')
+    pkgs <- c('sf', 'terra', 'curl', 'jsonlite', 'fs')
     missing <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)]
     if (length(missing) > 0) {
         install.packages(missing, repos = 'https://cloud.r-project.org', quiet = TRUE)
     }
     "
+}
 
-    # Preparer les patches via R
+# --- Mode 1 : FLAIR-HUB (telecharger, labelliser, organiser) ---
+if [ -n "$FLAIR_NIVEAU" ] && [ ! -d "$DATA_DIR/train/aerial" ]; then
+    echo ""
+    echo "========================================================"
+    echo " Mode FLAIR-HUB : niveau '$FLAIR_NIVEAU'"
+    echo "========================================================"
+
+    install_r_deps
+
+    # Convertir les modalites (aerial,dem -> c("aerial","dem"))
+    R_MODALITES=$(echo "$MODALITES" | sed 's/,/","/g')
+    R_MODALITES="c(\"$R_MODALITES\")"
+
     Rscript -e "
     # Charger le package en mode dev
-    for (f in list.files('R', full.names = TRUE, pattern = '\\\\.R$')) source(f)
+    for (f in list.files('R', full.names = TRUE, pattern = '\\\\.R\$')) source(f)
+
+    # Etape 1 : Telecharger les patches FLAIR-HUB
+    message('=== Etape 1/3 : Telechargement FLAIR-HUB ===')
+    download_flair_segmentation(
+        niveau = '$FLAIR_NIVEAU',
+        modalites = $R_MODALITES,
+        data_dir = '$FLAIR_DIR'
+    )
+
+    # Etape 2 : Labelliser avec BD Foret V2
+    message('=== Etape 2/3 : Labellisation BD Foret V2 ===')
+    labelliser_flair_bdforet('$FLAIR_DIR')
+
+    # Etape 3 : Organiser en train/val
+    message('=== Etape 3/3 : Organisation train/val ===')
+    preparer_flair_segmentation(
+        flair_dir = '$FLAIR_DIR',
+        output_dir = '$DATA_DIR',
+        modalites = $R_MODALITES,
+        val_ratio = $VAL_RATIO,
+        min_forest_pct = $MIN_FOREST_PCT
+    )
+    "
+fi
+
+# --- Mode 2 : AOI (telecharger ortho+DEM, labelliser, decouper) ---
+if [ -n "$AOI_PATH" ] && [ ! -d "$DATA_DIR/train/aerial" ]; then
+    echo ""
+    echo "========================================================"
+    echo " Mode AOI : $AOI_PATH"
+    echo "========================================================"
+
+    install_r_deps
+
+    Rscript -e "
+    for (f in list.files('R', full.names = TRUE, pattern = '\\\\.R\$')) source(f)
 
     preparer_donnees_segmentation(
         aoi_path = '$AOI_PATH',
@@ -230,15 +279,15 @@ if [ -n "$AOI_PATH" ] && [ ! -d "$DATA_DIR/train/aerial" ]; then
     "
 fi
 
-# Verifier que les patches existent
+# --- Verifier que les patches existent ---
 if [ ! -d "$DATA_DIR/train/aerial" ]; then
     echo ""
     echo "ERREUR: Pas de patches d'entrainement trouves dans $DATA_DIR/train/aerial"
     echo ""
-    echo "Deux options :"
-    echo "  1. Fournir un AOI : AOI_PATH=/data/aoi.gpkg bash $0"
-    echo "  2. Uploader les patches prepares :"
-    echo "     scp -r data/segmentation/ root@<IP>:$DATA_DIR/"
+    echo "Trois options :"
+    echo "  1. FLAIR-HUB (recommande) : FLAIR_NIVEAU=complet bash $0"
+    echo "  2. AOI personnalisee      : AOI_PATH=/data/aoi.gpkg bash $0"
+    echo "  3. Patches pre-prepares   : scp -r data/segmentation/ root@<IP>:$DATA_DIR/"
     exit 1
 fi
 
