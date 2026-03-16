@@ -103,6 +103,7 @@ param(
     [switch]$Segmentation,
     [string]$Flair = "",
     [string]$Aoi = "",
+    [string]$Branch = "main",
     [string]$NotifyEmail = "",
     [string]$NotifyWebhook = "",
     [switch]$DryRun
@@ -152,6 +153,7 @@ Write-Host "  Learning rate : $LR"
 Write-Host "  Modalites     : $Modalites"
 Write-Host "  Volume data   : ${DataVolumeGB} Go"
 Write-Host "  Unfreeze      : $(if ($Unfreeze) { 'oui' } else { 'non' })"
+Write-Host "  Branche       : $Branch"
 Write-Host "  Mode          : $(if ($Segmentation) { 'segmentation NDP0' } else { 'classification TreeSatAI' })"
 if ($Flair) {
     Write-Host "  FLAIR niveau  : $Flair"
@@ -482,6 +484,8 @@ $EnvExports += "export EPOCHS=$Epochs;"
 $EnvExports += "export BATCH_SIZE=$BatchSize;"
 $EnvExports += "export LR=$LR;"
 $EnvExports += "export MODALITES=$Modalites;"
+
+$EnvExports += "export BRANCH=$Branch;"
 
 $UnfreezeVal = $(if ($Unfreeze) { "1" } else { "" })
 if ($UnfreezeVal) {
