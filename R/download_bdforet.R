@@ -274,14 +274,19 @@ download_bdforet_for_aoi <- function(aoi, output_dir,
     return(NULL)
   }
 
-  # Reprojeter en Lambert-93
-  bdforet <- sf::st_transform(bdforet, 2154)
-
-  # Reparer les geometries invalides (coordonnees NA, anneaux non fermes, etc.)
+  # Nettoyer les geometries AVANT toute operation spatiale
+  # Le WFS GeoJSON peut contenir des geometries avec coordonnees NA
   bdforet <- sf::st_make_valid(bdforet)
   valid_mask <- !sf::st_is_empty(bdforet)
+  # Filtrer aussi les geometries dont les coordonnees contiennent des NA
+  coords_ok <- vapply(sf::st_geometry(bdforet), function(g) {
+    coords <- tryCatch(sf::st_coordinates(g), error = function(e) NULL)
+    !is.null(coords) && !anyNA(coords)
+  }, logical(1))
+  valid_mask <- valid_mask & coords_ok
   if (any(!valid_mask)) {
-    message(sprintf("  %d geometries invalides supprimees", sum(!valid_mask)))
+    message(sprintf("  %d geometries invalides/NA supprimees sur %d",
+                     sum(!valid_mask), length(valid_mask)))
     bdforet <- bdforet[valid_mask, ]
   }
   if (nrow(bdforet) == 0) {
@@ -289,9 +294,18 @@ download_bdforet_for_aoi <- function(aoi, output_dir,
     return(NULL)
   }
 
+  # Reprojeter en Lambert-93
+  bdforet <- sf::st_transform(bdforet, 2154)
+
   # Clipper sur l'AOI (s'assurer que les CRS correspondent)
   aoi_clip <- sf::st_transform(aoi, sf::st_crs(bdforet))
-  bdforet <- sf::st_intersection(bdforet, sf::st_union(aoi_clip))
+  bdforet <- tryCatch(
+    sf::st_intersection(bdforet, sf::st_union(aoi_clip)),
+    error = function(e) {
+      message(sprintf("  Intersection AOI echec: %s -> utilisation sans clip", e$message))
+      bdforet
+    }
+  )
 
   # Identifier la colonne TFV
   tfv_col <- NULL

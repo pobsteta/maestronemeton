@@ -229,6 +229,20 @@ test_tifs <- tif_files[1:n_test]
 label_dir <- file.path(flair_dir, "labels_ndp0", DOMAINE)
 dir.create(label_dir, recursive = TRUE, showWarnings = FALSE)
 
+# Nettoyer les geometries avec coordonnees NA avant toute operation spatiale
+bdforet <- sf::st_make_valid(bdforet)
+valid_mask <- !sf::st_is_empty(bdforet)
+coords_ok <- vapply(sf::st_geometry(bdforet), function(g) {
+  coords <- tryCatch(sf::st_coordinates(g), error = function(e) NULL)
+  !is.null(coords) && !anyNA(coords)
+}, logical(1))
+valid_mask <- valid_mask & coords_ok
+if (any(!valid_mask)) {
+  message(sprintf("  %d geometries invalides/NA supprimees sur %d",
+                   sum(!valid_mask), length(valid_mask)))
+  bdforet <- bdforet[valid_mask, ]
+}
+
 # Transformer bdforet dans le CRS des patches si necessaire
 patch_crs <- sf::st_crs(crs_str)
 if (!identical(sf::st_crs(bdforet)$wkt, patch_crs$wkt)) {
