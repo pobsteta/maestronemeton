@@ -513,8 +513,8 @@ ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "apt-get update -qq && 
 
 # Lancer l'entrainement dans tmux
 Log-Info "Lancement de l'entrainement dans tmux..."
-$TmuxCmd = "$EnvString bash ~/$TrainScript 2>&1 | tee ~/train.log"
-ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "tmux new-session -d -s maestro '$TmuxCmd'"
+$TmuxCmd = "$EnvString bash ~/$TrainScript 2>&1 | tee ~/train.log; echo ''; echo '=== Entrainement termine (code: '\$'?) ==='; echo 'Appuyez sur Entree pour fermer ou Ctrl+B D pour detacher'; read"
+ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "tmux new-session -d -s maestro \; set-option -t maestro remain-on-exit on \; send-keys '$TmuxCmd' Enter"
 
 # Verifier que la session tmux existe
 Start-Sleep -Seconds 2
