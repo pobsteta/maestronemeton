@@ -611,3 +611,11 @@ RESULT_DIR=$ResultDir
 "@ | Out-File -FilePath $InfoFile -Encoding UTF8
 
 Log-Info "Infos instance sauvegardees dans .scaleway_instance"
+
+# =============================================================================
+# --- Etape 6 : Attacher a la session tmux pour suivre en direct ---
+# =============================================================================
+Write-Host ""
+Log-Info "=== Connexion a la session tmux (Ctrl+B puis D pour detacher) ==="
+Write-Host ""
+ssh -t -o StrictHostKeyChecking=accept-new "root@$PublicIP" "tmux attach -t maestro"
