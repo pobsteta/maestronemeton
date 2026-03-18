@@ -528,7 +528,7 @@ echo "=== Entrainement termine (code: \$EXIT_CODE) ==="
 echo "Appuyez sur Entree pour fermer ou Ctrl+B D pour detacher"
 read
 "@
-$WrapperContent | ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "cat > ~/run_train.sh && chmod +x ~/run_train.sh"
+$WrapperContent | ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "sed 's/\r$//' > ~/run_train.sh && chmod +x ~/run_train.sh"
 
 ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "tmux new-session -d -s maestro ~/run_train.sh"
 
