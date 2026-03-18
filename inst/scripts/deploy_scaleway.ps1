@@ -90,7 +90,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$InstanceType = "GPU-3070-S",
+    [string]$InstanceType = "L4-1-24G",
     [string]$Image = "ubuntu_jammy_gpu_os_12",
     [string]$Zone = "fr-par-2",
     [string]$InstanceName = "maestro-train",
