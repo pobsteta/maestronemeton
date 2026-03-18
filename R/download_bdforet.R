@@ -636,9 +636,14 @@ labelliser_flair_bdforet <- function(flair_dir = "data/flair_hub",
         next
       }
 
-      # Creer le raster label (meme emprise/resolution que le patch)
+      # Creer le raster label mono-bande (meme emprise/resolution que le patch)
       ref <- terra::rast(tif)
-      label_rast <- terra::rast(ref)
+      label_rast <- terra::rast(
+        ext = terra::ext(ref),
+        res = terra::res(ref),
+        crs = terra::crs(ref),
+        nlyrs = 1
+      )
       terra::values(label_rast) <- 9L  # Non-foret par defaut
 
       if (!is.null(bdforet_vect)) {
