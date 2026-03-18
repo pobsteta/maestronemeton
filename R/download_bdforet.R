@@ -255,8 +255,9 @@ download_bdforet_for_aoi <- function(aoi, output_dir,
     return(NULL)
   }
 
-  # Clipper sur l'AOI
-  bdforet <- sf::st_intersection(bdforet, sf::st_union(aoi))
+  # Clipper sur l'AOI (s'assurer que les CRS correspondent)
+  aoi_clip <- sf::st_transform(aoi, sf::st_crs(bdforet))
+  bdforet <- sf::st_intersection(bdforet, sf::st_union(aoi_clip))
 
   # Identifier la colonne TFV
   tfv_col <- NULL
@@ -508,13 +509,22 @@ labelliser_flair_bdforet <- function(flair_dir = "data/flair_hub",
     }
 
     # Creer un sf pour la bbox englobante du domaine
+    # NB: utiliser les accesseurs explicites terra::xmin() etc.
+    # pour eviter toute ambiguite d'ordre avec as.vector()
     crs_str <- terra::crs(terra::rast(tif_files[1]))
-    bbox_vals <- as.numeric(as.vector(bbox_all))
-    names(bbox_vals) <- c("xmin", "xmax", "ymin", "ymax")
+    bbox_vals <- c(
+      xmin = terra::xmin(bbox_all),
+      ymin = terra::ymin(bbox_all),
+      xmax = terra::xmax(bbox_all),
+      ymax = terra::ymax(bbox_all)
+    )
     if (anyNA(bbox_vals) || any(!is.finite(bbox_vals))) {
       warning(sprintf("  Domaine %s: bbox invalide apres union, ignore", dom_label))
       next
     }
+    message(sprintf("  Bbox domaine: xmin=%.0f ymin=%.0f xmax=%.0f ymax=%.0f",
+                     bbox_vals["xmin"], bbox_vals["ymin"],
+                     bbox_vals["xmax"], bbox_vals["ymax"]))
     bbox_poly <- sf::st_as_sfc(sf::st_bbox(bbox_vals, crs = sf::st_crs(crs_str)))
     aoi_domaine <- sf::st_sf(geometry = bbox_poly)
 
@@ -539,9 +549,25 @@ labelliser_flair_bdforet <- function(flair_dir = "data/flair_hub",
       }
     }
 
+    # Diagnostic : afficher l'etat de bdforet
+    if (is.null(bdforet) || nrow(bdforet) == 0) {
+      warning(sprintf("  Domaine %s: BD Foret vide ou NULL -> tous les patches seront non-foret", dom_label))
+    } else {
+      message(sprintf("  BD Foret chargee: %d polygones, CRS=%s",
+                       nrow(bdforet), sf::st_crs(bdforet)$input))
+      # Verifier que les CRS correspondent
+      patch_crs <- sf::st_crs(sf::st_crs(crs_str))
+      bdforet_crs <- sf::st_crs(bdforet)
+      if (!identical(patch_crs$wkt, bdforet_crs$wkt)) {
+        message("  [DIAG] CRS patches vs bdforet different, transformation automatique dans l'intersection")
+        bdforet <- sf::st_transform(bdforet, patch_crs)
+      }
+    }
+
     # Rasteriser patch par patch
     n_labelled <- 0L
     n_forest <- 0L
+    n_intersect_ok <- 0L
 
     for (tif in tif_files) {
       patch_name <- tools::file_path_sans_ext(basename(tif))
@@ -583,6 +609,7 @@ labelliser_flair_bdforet <- function(flair_dir = "data/flair_hub",
         }, error = function(e) NULL)
 
         if (!is.null(patch_bdforet) && nrow(patch_bdforet) > 0) {
+          n_intersect_ok <- n_intersect_ok + 1L
           # Rasteriser les polygones par code NDP0
           bdforet_vect <- terra::vect(patch_bdforet)
           codes <- sort(unique(patch_bdforet$code_ndp0), decreasing = TRUE)
@@ -614,8 +641,8 @@ labelliser_flair_bdforet <- function(flair_dir = "data/flair_hub",
     }
 
     pct <- if (n_labelled > 0) round(n_forest / n_labelled * 100, 1) else 0
-    message(sprintf("  Domaine %s: %d labellises, %d forestiers (%.1f%%)",
-                     dom_label, n_labelled, n_forest, pct))
+    message(sprintf("  Domaine %s: %d labellises, %d forestiers (%.1f%%), %d intersections BD Foret non-vides",
+                     dom_label, n_labelled, n_forest, pct, n_intersect_ok))
 
     stats <- rbind(stats, data.frame(
       domaine = dom_label,
