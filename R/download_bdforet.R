@@ -149,10 +149,10 @@ download_bdforet_for_aoi <- function(aoi, output_dir,
   tile_size <- 0.5  # degres
 
   tiles <- list()
-  x_breaks <- seq(bbox_wgs84["xmin"], bbox_wgs84["xmax"], by = tile_size)
-  if (tail(x_breaks, 1) < bbox_wgs84["xmax"]) x_breaks <- c(x_breaks, bbox_wgs84["xmax"])
-  y_breaks <- seq(bbox_wgs84["ymin"], bbox_wgs84["ymax"], by = tile_size)
-  if (tail(y_breaks, 1) < bbox_wgs84["ymax"]) y_breaks <- c(y_breaks, bbox_wgs84["ymax"])
+  x_breaks <- seq(unname(bbox_wgs84["xmin"]), unname(bbox_wgs84["xmax"]), by = tile_size)
+  if (tail(x_breaks, 1) < bbox_wgs84["xmax"]) x_breaks <- c(x_breaks, unname(bbox_wgs84["xmax"]))
+  y_breaks <- seq(unname(bbox_wgs84["ymin"]), unname(bbox_wgs84["ymax"]), by = tile_size)
+  if (tail(y_breaks, 1) < bbox_wgs84["ymax"]) y_breaks <- c(y_breaks, unname(bbox_wgs84["ymax"]))
 
   for (i in seq_len(length(x_breaks) - 1)) {
     for (j in seq_len(length(y_breaks) - 1)) {
