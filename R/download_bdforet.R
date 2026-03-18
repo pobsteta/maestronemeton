@@ -282,7 +282,12 @@ download_bdforet_for_aoi <- function(aoi, output_dir,
 
   if (is.null(tfv_col)) {
     warning("Colonne CODE_TFV non trouvee dans la BD Foret. ",
-            "Colonnes disponibles: ", paste(names(bdforet), collapse = ", "))
+            "Colonnes disponibles: ", paste(names(bdforet), collapse = ", "),
+            "\n  Premiers valeurs par colonne:")
+    for (col in setdiff(names(bdforet), "geometry")) {
+      vals <- head(unique(as.character(bdforet[[col]])), 5)
+      warning(sprintf("    %s: %s", col, paste(vals, collapse = ", ")))
+    }
     bdforet$code_ndp0 <- 9L  # Non-foret par defaut
   } else {
     message(sprintf("  Colonne TFV: %s", tfv_col))
@@ -537,7 +542,16 @@ labelliser_flair_bdforet <- function(flair_dir = "data/flair_hub",
     if (file.exists(cache_path)) {
       message("  Cache BD Foret: ", cache_path)
       bdforet <- sf::st_read(cache_path, quiet = TRUE)
-    } else {
+      # Rejeter les caches vides ou sans foret (echec precedent)
+      if (nrow(bdforet) == 0 || !("code_ndp0" %in% names(bdforet)) ||
+          all(bdforet$code_ndp0 == 9L)) {
+        warning(sprintf("  Cache invalide (0 polygones forestiers): %s -> re-telechargement",
+                         cache_path))
+        file.remove(cache_path)
+        bdforet <- NULL
+      }
+    }
+    if (is.null(bdforet)) {
       bdforet <- tryCatch({
         download_bdforet_for_aoi(aoi_domaine, cache_dir)
       }, error = function(e) {
