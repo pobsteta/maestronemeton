@@ -234,12 +234,27 @@ bdforet <- sf::st_make_valid(bdforet)
 bdforet <- bdforet[!sf::st_is_empty(bdforet), ]
 message(sprintf("  %d geometries valides", nrow(bdforet)))
 
-# Transformer bdforet dans le CRS des patches si necessaire
+# Debug : bbox BD Foret vs patches
+bb_bdforet <- sf::st_bbox(bdforet)
+message(sprintf("  Bbox BD Foret : xmin=%.0f ymin=%.0f xmax=%.0f ymax=%.0f (CRS: %s)",
+                bb_bdforet["xmin"], bb_bdforet["ymin"],
+                bb_bdforet["xmax"], bb_bdforet["ymax"],
+                sf::st_crs(bdforet)$input))
+
+ref_first <- terra::rast(test_tifs[1])
+ext_first <- terra::ext(ref_first)
+message(sprintf("  Bbox patch 1  : xmin=%.0f ymin=%.0f xmax=%.0f ymax=%.0f (CRS: %s)",
+                terra::xmin(ext_first), terra::ymin(ext_first),
+                terra::xmax(ext_first), terra::ymax(ext_first),
+                terra::crs(ref_first, describe = TRUE)$name))
+
+# Transformer bdforet dans le CRS des patches
 patch_crs <- sf::st_crs(crs_str)
-if (!identical(sf::st_crs(bdforet)$wkt, patch_crs$wkt)) {
-  message("  Transformation CRS BD Foret -> CRS patches")
-  bdforet <- sf::st_transform(bdforet, patch_crs)
-}
+bdforet <- sf::st_transform(bdforet, patch_crs)
+bb_bdforet2 <- sf::st_bbox(bdforet)
+message(sprintf("  Bbox BD Foret (apres transform) : xmin=%.0f ymin=%.0f xmax=%.0f ymax=%.0f",
+                bb_bdforet2["xmin"], bb_bdforet2["ymin"],
+                bb_bdforet2["xmax"], bb_bdforet2["ymax"]))
 
 results <- data.frame(
   patch = character(0),
