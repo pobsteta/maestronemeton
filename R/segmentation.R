@@ -486,11 +486,18 @@ preparer_flair_segmentation <- function(flair_dir = "data/flair_hub",
     if (!dir.exists(lbl_dir)) next
 
     label_files <- list.files(lbl_dir, pattern = "\\.tif$", full.names = TRUE)
+
+    # Index des fichiers aerial (recherche recursive car FLAIR-HUB extrait
+    # dans des sous-dossiers imbriques)
+    aerial_tifs <- list.files(aer_dir, pattern = "\\.tif$",
+                               recursive = TRUE, full.names = TRUE)
+    aerial_index <- stats::setNames(aerial_tifs,
+                                     tools::file_path_sans_ext(basename(aerial_tifs)))
+
     for (lf in label_files) {
       pid <- tools::file_path_sans_ext(basename(lf))
-      # Verifier que le aerial correspondant existe
-      aerial_tif <- file.path(aer_dir, paste0(pid, ".tif"))
-      if (!file.exists(aerial_tif)) next
+      # Verifier que le aerial correspondant existe (recherche par nom de base)
+      if (!(pid %in% names(aerial_index))) next
 
       patch_list <- rbind(patch_list, data.frame(
         patch_id = pid,
@@ -560,18 +567,22 @@ preparer_flair_segmentation <- function(flair_dir = "data/flair_hub",
 
     # Modalites
     for (mod in modalites) {
+      # Recherche recursive pour gerer les sous-dossiers FLAIR-HUB
       if (nchar(dom) > 0) {
-        src_mod <- file.path(flair_dir, mod, dom, paste0(pid, ".tif"))
+        mod_dir <- file.path(flair_dir, mod, dom)
       } else {
-        src_mod <- file.path(flair_dir, mod, paste0(pid, ".tif"))
+        mod_dir <- file.path(flair_dir, mod)
       }
 
-      if (!file.exists(src_mod)) {
-        # Essayer sans le domaine (structure plate)
-        src_mod <- file.path(flair_dir, mod, paste0(pid, ".tif"))
+      src_mod <- NULL
+      if (dir.exists(mod_dir)) {
+        candidates <- list.files(mod_dir,
+                                  pattern = paste0("^", gsub("([.+?^${}()|\\[\\]])", "\\\\\\1", pid), "\\.tif$"),
+                                  recursive = TRUE, full.names = TRUE)
+        if (length(candidates) > 0) src_mod <- candidates[1]
       }
 
-      if (file.exists(src_mod)) {
+      if (!is.null(src_mod) && file.exists(src_mod)) {
         dst_mod <- file.path(output_dir, sp, mod, paste0(new_id, ".tif"))
         file.copy(src_mod, dst_mod, overwrite = TRUE)
       }

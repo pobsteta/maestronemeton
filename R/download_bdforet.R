@@ -101,10 +101,12 @@ mapping_tfv_ndp0 <- function() {
 #' @export
 tfv_to_ndp0 <- function(code_tfv) {
   mapping <- mapping_tfv_ndp0()
-  result <- rep(9L, length(code_tfv))  # Non-foret par defaut
+  # Normaliser en majuscules et supprimer les espaces
+  code_tfv_clean <- trimws(toupper(as.character(code_tfv)))
+  result <- rep(9L, length(code_tfv_clean))
 
   for (i in seq_len(nrow(mapping))) {
-    mask <- grepl(mapping$tfv_pattern[i], code_tfv)
+    mask <- grepl(mapping$tfv_pattern[i], code_tfv_clean, ignore.case = TRUE)
     result[mask] <- mapping$code_ndp0[i]
   }
 
@@ -293,20 +295,26 @@ download_bdforet_for_aoi <- function(aoi, output_dir,
 
   # Identifier la colonne TFV
   tfv_col <- NULL
+  col_names <- names(bdforet)
+  col_names_lower <- tolower(col_names)
+
+  # Recherche par nom exact puis insensible a la casse
   possible_cols <- c("CODE_TFV", "code_tfv", "tfv", "TFV")
   for (col in possible_cols) {
-    if (col %in% names(bdforet)) {
-      tfv_col <- col
+    idx <- match(tolower(col), col_names_lower)
+    if (!is.na(idx)) {
+      tfv_col <- col_names[idx]
       break
     }
   }
 
   if (is.null(tfv_col)) {
     # Chercher une colonne qui contient des codes TFV (commencent par FF, FP, LA, FO)
-    for (col in names(bdforet)) {
+    for (col in setdiff(col_names, "geometry")) {
       vals <- as.character(bdforet[[col]])
-      if (any(grepl("^(FF|FP|LA|FO)", vals, ignore.case = FALSE))) {
+      if (any(grepl("^(FF|FP|LA|FO)", vals, ignore.case = TRUE))) {
         tfv_col <- col
+        message(sprintf("  [DIAG] Colonne TFV detectee par contenu: '%s'", col))
         break
       }
     }
@@ -314,16 +322,26 @@ download_bdforet_for_aoi <- function(aoi, output_dir,
 
   if (is.null(tfv_col)) {
     warning("Colonne CODE_TFV non trouvee dans la BD Foret. ",
-            "Colonnes disponibles: ", paste(names(bdforet), collapse = ", "),
-            "\n  Premiers valeurs par colonne:")
-    for (col in setdiff(names(bdforet), "geometry")) {
+            "Colonnes disponibles: ", paste(col_names, collapse = ", "))
+    for (col in setdiff(col_names, "geometry")) {
       vals <- head(unique(as.character(bdforet[[col]])), 5)
       warning(sprintf("    %s: %s", col, paste(vals, collapse = ", ")))
     }
     bdforet$code_ndp0 <- 9L  # Non-foret par defaut
   } else {
     message(sprintf("  Colonne TFV: %s", tfv_col))
-    bdforet$code_ndp0 <- tfv_to_ndp0(as.character(bdforet[[tfv_col]]))
+    tfv_vals <- as.character(bdforet[[tfv_col]])
+    bdforet$code_ndp0 <- tfv_to_ndp0(tfv_vals)
+    # Diagnostic : compter les codes mappes vs non-mappes
+    n_forest <- sum(bdforet$code_ndp0 < 9L)
+    n_non_forest <- sum(bdforet$code_ndp0 == 9L)
+    message(sprintf("  [DIAG] TFV -> NDP0 : %d forestiers, %d non-forestiers sur %d polygones",
+                     n_forest, n_non_forest, nrow(bdforet)))
+    if (n_forest == 0 && nrow(bdforet) > 0) {
+      sample_vals <- head(unique(tfv_vals), 10)
+      warning(sprintf("  ATTENTION: aucun polygone forestier! Valeurs TFV: %s",
+                       paste(sample_vals, collapse = ", ")))
+    }
   }
 
   # Statistiques
@@ -630,7 +648,8 @@ labelliser_flair_bdforet <- function(flair_dir = "data/flair_hub",
         # Compter la foret dans le label existant
         lbl <- terra::rast(label_path)
         vals <- terra::values(lbl)
-        if (sum(vals < 9, na.rm = TRUE) / length(vals) > 0.05) {
+        n_valid <- sum(!is.na(vals))
+        if (n_valid > 0 && sum(vals < 9, na.rm = TRUE) / n_valid > 0.05) {
           n_forest <- n_forest + 1L
         }
         next
@@ -668,7 +687,8 @@ labelliser_flair_bdforet <- function(flair_dir = "data/flair_hub",
 
       n_labelled <- n_labelled + 1L
       vals <- terra::values(label_rast)
-      if (sum(vals < 9, na.rm = TRUE) / length(vals) > 0.05) {
+      n_valid <- sum(!is.na(vals))
+      if (n_valid > 0 && sum(vals < 9, na.rm = TRUE) / n_valid > 0.05) {
         n_forest <- n_forest + 1L
       }
 
