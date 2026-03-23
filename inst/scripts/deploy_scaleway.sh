@@ -31,6 +31,7 @@
 #   --name NAME            Nom de l'instance (defaut: maestro-train)
 #   --notify-webhook URL   URL webhook pour notification (ntfy.sh, Slack)
 #   --notify-email EMAIL   Email de notification (debut + fin entrainement)
+#   --branch BRANCH        Branche git a cloner sur l'instance (defaut: main)
 #   --dry-run              Afficher les commandes sans executer
 #
 # Instances GPU Scaleway recommandees :
@@ -73,6 +74,7 @@ AOI_LOCAL=""
 DRY_RUN=false
 NOTIFY_WEBHOOK=""
 NOTIFY_EMAIL=""
+BRANCH="main"
 
 # --- Parse arguments ---
 while [[ $# -gt 0 ]]; do
@@ -91,6 +93,7 @@ while [[ $# -gt 0 ]]; do
         --name)          INSTANCE_NAME="$2"; shift 2 ;;
         --notify-webhook) NOTIFY_WEBHOOK="$2"; shift 2 ;;
         --notify-email)  NOTIFY_EMAIL="$2"; shift 2 ;;
+        --branch)        BRANCH="$2"; shift 2 ;;
         --dry-run)       DRY_RUN=true; shift ;;
         -h|--help)
             head -45 "$0" | tail -40
@@ -115,6 +118,7 @@ echo "  Batch size    : $BATCH_SIZE"
 echo "  Learning rate : $LR"
 echo "  Modalites     : $MODALITES"
 echo "  Unfreeze      : ${UNFREEZE:-non}"
+echo "  Branche       : $BRANCH"
 echo "  Mode          : $(if $SEGMENTATION; then echo 'segmentation NDP0'; else echo 'classification TreeSatAI'; fi)"
 if [ -n "$FLAIR_NIVEAU" ]; then
 echo "  FLAIR niveau  : $FLAIR_NIVEAU"
@@ -315,6 +319,7 @@ if $SEGMENTATION; then
         tmux new-session -d -s maestro \"
             $EXTRA_ENV
             $NOTIFY_ENV
+            export BRANCH=$BRANCH
             export EPOCHS=$EPOCHS
             export BATCH_SIZE=$BATCH_SIZE
             export LR=$LR
@@ -332,6 +337,7 @@ else
         apt-get update -qq && apt-get install -y -qq tmux > /dev/null 2>&1
         tmux new-session -d -s maestro \"
             $NOTIFY_ENV
+            export BRANCH=$BRANCH
             export EPOCHS=$EPOCHS
             export BATCH_SIZE=$BATCH_SIZE
             bash ~/$TRAIN_SCRIPT 2>&1 | tee ~/train.log
