@@ -316,9 +316,10 @@ def predire_patch_segmentation(modele, image_np, device="cpu"):
     # Normalisation
     if n_ch <= 4:
         t = _normaliser_rgbi(t)
-    elif n_ch == 5:
+    elif n_ch >= 5:
+        # RGBI (4 bandes) + canaux terrain (1 ou 2 bandes)
         t_rgbi = _normaliser_rgbi(t[:, :4])
-        t_dem = _normaliser_dem(t[:, 4:5])
+        t_dem = _normaliser_dem(t[:, 4:])
         t = torch.cat([t_rgbi, t_dem], dim=1)
 
     t = t.to(device_t)
@@ -354,9 +355,10 @@ def predire_batch_segmentation(modele, batch_np, device="cpu"):
 
     if n_ch <= 4:
         t = _normaliser_rgbi(t)
-    elif n_ch == 5:
+    elif n_ch >= 5:
+        # RGBI (4 bandes) + canaux terrain (1 ou 2 bandes: DTM, SLOPE, TWI, etc.)
         t_rgbi = _normaliser_rgbi(t[:, :4])
-        t_dem = _normaliser_dem(t[:, 4:5])
+        t_dem = _normaliser_dem(t[:, 4:])
         t = torch.cat([t_rgbi, t_dem], dim=1)
 
     t = t.to(device_t)
@@ -450,9 +452,10 @@ def predire_raster_complet(modele, image_np, patch_size=512, overlap=128,
 
         if n_ch <= 4:
             t = _normaliser_rgbi(t)
-        elif n_ch == 5:
+        elif n_ch >= 5:
+            # RGBI (4 bandes) + canaux terrain (1 ou 2 bandes)
             t_rgbi = _normaliser_rgbi(t[:, :4])
-            t_dem = _normaliser_dem(t[:, 4:5])
+            t_dem = _normaliser_dem(t[:, 4:])
             t = torch.cat([t_rgbi, t_dem], dim=1)
 
         t = t.to(device_t)

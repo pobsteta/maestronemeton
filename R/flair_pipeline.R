@@ -15,7 +15,10 @@
 #' @param encoder Architecture encodeur (defaut: `"resnet34"`)
 #' @param decoder Architecture decodeur (defaut: `"unet"`)
 #' @param n_classes Nombre de classes (defaut: 19 pour CoSIA)
-#' @param use_dem Utiliser le DEM comme 5e bande (defaut: FALSE)
+#' @param dem_channels Canaux DEM a ajouter. `NULL` = pas de DEM (RGBI seul, 4 bandes).
+#'   Vecteur de noms parmi `c("DSM", "DTM", "SLOPE", "ASPECT", "TPI", "TWI")`.
+#'   Ex: `c("SLOPE", "TWI")` = 6 bandes (RGBI + pente + TWI).
+#'   Ex: `"DTM"` = 5 bandes (RGBI + DTM classique).
 #' @param millesime_ortho Millesime de l'ortho RVB (`NULL` = plus recent)
 #' @param millesime_irc Millesime de l'ortho IRC (`NULL` = plus recent)
 #' @param patch_size Taille des patches en pixels (defaut: 512)
@@ -26,11 +29,17 @@
 #' @export
 #' @examples
 #' \dontrun{
-#' # Classification basique RGBI
+#' # Classification basique RGBI (4 bandes)
 #' flair_pipeline("data/aoi.gpkg")
 #'
-#' # Avec DEM (5 bandes, LC-B)
-#' flair_pipeline("data/aoi.gpkg", use_dem = TRUE,
+#' # Avec pente + TWI (6 bandes, optimal foret)
+#' flair_pipeline("data/aoi.gpkg",
+#'                 dem_channels = c("SLOPE", "TWI"),
+#'                 model_id = "IGNF/FLAIR-HUB_RGBI-DEM_19cl")
+#'
+#' # Avec DTM classique (5 bandes)
+#' flair_pipeline("data/aoi.gpkg",
+#'                 dem_channels = "DTM",
 #'                 model_id = "IGNF/FLAIR-HUB_RGBI-DEM_19cl")
 #' }
 flair_pipeline <- function(aoi_path = "data/aoi.gpkg",
@@ -39,7 +48,7 @@ flair_pipeline <- function(aoi_path = "data/aoi.gpkg",
                             encoder = "resnet34",
                             decoder = "unet",
                             n_classes = 19L,
-                            use_dem = FALSE,
+                            dem_channels = NULL,
                             millesime_ortho = NULL,
                             millesime_irc = NULL,
                             patch_size = 512L,
@@ -69,18 +78,23 @@ flair_pipeline <- function(aoi_path = "data/aoi.gpkg",
   terra::writeRaster(rgbi, rgbi_path, overwrite = TRUE)
   message(sprintf("RGBI sauvegarde: %s", rgbi_path))
 
-  # 4. DEM optionnel (5e bande)
-  n_bands <- 4L
+  # 4. DEM optionnel (canaux terrain configurable)
   input_raster <- rgbi
+  n_bands <- 4L
 
-  if (use_dem) {
-    dem_data <- download_dem_for_aoi(aoi, output_dir, rgbi = rgbi)
+  if (!is.null(dem_channels)) {
+    dem_channels <- toupper(dem_channels)
+    # Pour FLAIR, on telecharge le DEM a 1m puis on resample a 0.2m
+    # car FLAIR concatene toutes les bandes a la meme resolution
+    dem_data <- download_dem_for_aoi(aoi, output_dir,
+                                      dem_channels = dem_channels)
     if (!is.null(dem_data)) {
-      dem <- aligner_dem_sur_rgbi(dem_data$dem, rgbi)
-      # Prendre seulement la premiere bande du DEM (CHM ou DTM)
-      input_raster <- c(rgbi, dem[[1]])
-      n_bands <- 5L
-      message(sprintf("  Input: RGBI + DEM (%d bandes)", n_bands))
+      # Reechantillonner le DEM de 1m vers 0.2m pour correspondre au RGBI
+      dem_aligned <- terra::resample(dem_data$dem, rgbi, method = "bilinear")
+      input_raster <- c(rgbi, dem_aligned)
+      n_bands <- 4L + terra::nlyr(dem_aligned)
+      message(sprintf("  Input: RGBI + %s (%d bandes)",
+                       paste(dem_channels, collapse = " + "), n_bands))
     } else {
       message("  DEM non disponible, utilisation de RGBI seul")
     }

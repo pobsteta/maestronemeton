@@ -29,6 +29,9 @@
 #   --segmentation         Mode segmentation (decodeur NDP0 au lieu de TreeSatAI)
 #   --aoi AOI_PATH         Chemin local vers l'AOI (mode segmentation)
 #   --name NAME            Nom de l'instance (defaut: maestro-train)
+#   --notify-webhook URL   URL webhook pour notification (ntfy.sh, Slack)
+#   --notify-email EMAIL   Email de notification (debut + fin entrainement)
+#   --branch BRANCH        Branche git a cloner sur l'instance (defaut: main)
 #   --dry-run              Afficher les commandes sans executer
 #
 # Instances GPU Scaleway recommandees :
@@ -69,6 +72,9 @@ SEGMENTATION=false
 FLAIR_NIVEAU=""
 AOI_LOCAL=""
 DRY_RUN=false
+NOTIFY_WEBHOOK=""
+NOTIFY_EMAIL=""
+BRANCH="main"
 
 # --- Parse arguments ---
 while [[ $# -gt 0 ]]; do
@@ -85,6 +91,9 @@ while [[ $# -gt 0 ]]; do
         --flair)         FLAIR_NIVEAU="$2"; SEGMENTATION=true; shift 2 ;;
         --aoi)           AOI_LOCAL="$2"; shift 2 ;;
         --name)          INSTANCE_NAME="$2"; shift 2 ;;
+        --notify-webhook) NOTIFY_WEBHOOK="$2"; shift 2 ;;
+        --notify-email)  NOTIFY_EMAIL="$2"; shift 2 ;;
+        --branch)        BRANCH="$2"; shift 2 ;;
         --dry-run)       DRY_RUN=true; shift ;;
         -h|--help)
             head -45 "$0" | tail -40
@@ -109,12 +118,19 @@ echo "  Batch size    : $BATCH_SIZE"
 echo "  Learning rate : $LR"
 echo "  Modalites     : $MODALITES"
 echo "  Unfreeze      : ${UNFREEZE:-non}"
+echo "  Branche       : $BRANCH"
 echo "  Mode          : $(if $SEGMENTATION; then echo 'segmentation NDP0'; else echo 'classification TreeSatAI'; fi)"
 if [ -n "$FLAIR_NIVEAU" ]; then
 echo "  FLAIR niveau  : $FLAIR_NIVEAU"
 fi
 if [ -n "$AOI_LOCAL" ]; then
 echo "  AOI locale    : $AOI_LOCAL"
+fi
+if [ -n "$NOTIFY_WEBHOOK" ]; then
+echo "  Webhook       : $NOTIFY_WEBHOOK"
+fi
+if [ -n "$NOTIFY_EMAIL" ]; then
+echo "  Email notif   : $NOTIFY_EMAIL"
 fi
 echo ""
 
@@ -283,6 +299,14 @@ fi
 # Lancer l'entrainement dans tmux (persistent meme si SSH deconnecte)
 log_info "Lancement de l'entrainement dans tmux..."
 
+NOTIFY_ENV=""
+if [ -n "$NOTIFY_WEBHOOK" ]; then
+    NOTIFY_ENV="export NOTIFY_WEBHOOK=$NOTIFY_WEBHOOK"
+fi
+if [ -n "$NOTIFY_EMAIL" ]; then
+    NOTIFY_ENV="$NOTIFY_ENV${NOTIFY_ENV:+; }export NOTIFY_EMAIL=$NOTIFY_EMAIL"
+fi
+
 if $SEGMENTATION; then
     EXTRA_ENV=""
     if [ -n "$FLAIR_NIVEAU" ]; then
@@ -294,6 +318,8 @@ if $SEGMENTATION; then
         apt-get update -qq && apt-get install -y -qq tmux > /dev/null 2>&1
         tmux new-session -d -s maestro \"
             $EXTRA_ENV
+            $NOTIFY_ENV
+            export BRANCH=$BRANCH
             export EPOCHS=$EPOCHS
             export BATCH_SIZE=$BATCH_SIZE
             export LR=$LR
@@ -310,6 +336,8 @@ else
     ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" bash -c "'
         apt-get update -qq && apt-get install -y -qq tmux > /dev/null 2>&1
         tmux new-session -d -s maestro \"
+            $NOTIFY_ENV
+            export BRANCH=$BRANCH
             export EPOCHS=$EPOCHS
             export BATCH_SIZE=$BATCH_SIZE
             bash ~/$TRAIN_SCRIPT 2>&1 | tee ~/train.log
