@@ -259,14 +259,16 @@ executer_segmentation <- function(segmenter, modalites, aoi,
     vals_prob[mask_better] <- terra::values(new_prob)[mask_better]
 
     # Reecrire dans les rasters complets
-    # (utiliser les positions de ext_inter dans le raster complet)
-    raster_classes <- terra::cover(
-      terra::rast(ext = ext_inter, nrows = nrow(cur_cls), ncols = ncol(cur_cls),
-                   crs = terra::crs(ref), vals = vals_cls),
-      raster_classes
-    )
-    # Simplifier: ecrire directement le patch
-    # (terra::cover prend les valeurs du premier raster la ou il n'est pas NA)
+    # Creer un raster temporaire avec les nouvelles valeurs et le merger
+    tmp_cls <- terra::rast(ext = ext_inter, nrows = nrow(cur_cls),
+                            ncols = ncol(cur_cls), crs = terra::crs(ref))
+    terra::values(tmp_cls) <- vals_cls
+    tmp_prob <- terra::rast(ext = ext_inter, nrows = nrow(cur_cls),
+                             ncols = ncol(cur_cls), crs = terra::crs(ref))
+    terra::values(tmp_prob) <- vals_prob
+
+    raster_classes <- terra::merge(tmp_cls, raster_classes)
+    raster_proba <- terra::merge(tmp_prob, raster_proba)
 
     n_done <- n_done + 1L
     if (n_done %% 50 == 0 || n_done == n_patches) {
