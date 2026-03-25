@@ -62,42 +62,41 @@ calculer_derives_terrain <- function(dtm) {
 }
 
 
-#' Assembler un DEM 2 bandes a partir des canaux choisis
+#' Assembler un DEM multi-bandes a partir des canaux choisis
 #'
-#' Selectionne 2 canaux parmi les sources disponibles (DSM, DTM, SLOPE,
-#' ASPECT, TPI, TWI) et les empile en un SpatRaster 2 bandes pour MAESTRO.
+#' Selectionne 1 a 6 canaux parmi les sources disponibles (DSM, DTM, SLOPE,
+#' ASPECT, TPI, TWI) et les empile en un SpatRaster. MAESTRO attend 2 bandes,
+#' FLAIR peut utiliser 1 a 2 bandes supplementaires.
 #'
 #' @param dsm SpatRaster mono-bande (DSM)
 #' @param dtm SpatRaster mono-bande (DTM)
 #' @param derives Liste de derives terrain (issue de [calculer_derives_terrain()])
-#' @param dem_channels Vecteur de 2 noms de canaux parmi
+#' @param dem_channels Vecteur de 1 a 6 noms de canaux parmi
 #'   `c("DSM", "DTM", "SLOPE", "ASPECT", "TPI", "TWI")`
-#' @return SpatRaster 2 bandes avec les canaux selectionnes
+#' @return SpatRaster avec les canaux selectionnes
 #' @export
 assembler_dem_channels <- function(dsm, dtm, derives, dem_channels) {
   valid_channels <- c("DSM", "DTM", "SLOPE", "ASPECT", "TPI", "TWI")
   dem_channels <- toupper(dem_channels)
 
-  if (length(dem_channels) != 2) {
-    stop("dem_channels doit contenir exactement 2 noms de canaux, ex: c('SLOPE', 'TWI')")
-  }
   unknown <- setdiff(dem_channels, valid_channels)
   if (length(unknown) > 0) {
     stop(sprintf("Canal(aux) DEM inconnu(s): %s. Valides: %s",
                  paste(unknown, collapse = ", "),
                  paste(valid_channels, collapse = ", ")))
   }
+  if (length(dem_channels) < 1 || length(dem_channels) > 6) {
+    stop("dem_channels doit contenir entre 1 et 6 noms de canaux")
+  }
 
   # Construire la banque de canaux disponibles
   banque <- list(DSM = dsm, DTM = dtm)
   banque <- c(banque, derives)
 
-  band1 <- banque[[dem_channels[1]]]
-  band2 <- banque[[dem_channels[2]]]
-
-  dem <- c(band1, band2)
+  bands <- lapply(dem_channels, function(ch) banque[[ch]])
+  dem <- do.call(c, bands)
   names(dem) <- dem_channels
 
-  message(sprintf("  DEM assemble: %s + %s", dem_channels[1], dem_channels[2]))
+  message(sprintf("  DEM assemble: %s", paste(dem_channels, collapse = " + ")))
   dem
 }
