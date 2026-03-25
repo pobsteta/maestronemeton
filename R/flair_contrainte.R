@@ -184,22 +184,57 @@ pipeline_flair_contrainte <- function(raster_seg,
   message("=== Pipeline FLAIR + contrainte segmentation ===")
 
   # 1. Preparer l'input FLAIR
-  if (!is.null(dem) && grepl("DEM", model_flair)) {
-    message("  Modele FLAIR avec DEM (5 bandes)")
-    input_flair <- c(rgbi, dem[[1]])
+  if (grepl("rgbie", model_flair, ignore.case = TRUE)) {
+    message("  Modele FLAIR avec elevation (5 bandes RGBI+E)")
+    # Le modele rgbie attend le DSM brut en 5eme bande, resample a 0.2m
+    if (!is.null(dem)) {
+      # Prendre la 1ere bande du DEM et resampler a la resolution du RGBI
+      dem_1band <- dem[[1]]
+      if (!terra::compareGeom(dem_1band, rgbi, stopOnError = FALSE)) {
+        dem_1band <- terra::resample(dem_1band, rgbi, method = "bilinear")
+      }
+      input_flair <- c(rgbi, dem_1band)
+    } else {
+      # Telecharger le DTM si pas de DEM fourni
+      message("  Telechargement DTM pour le modele rgbie...")
+      aoi <- terra::vect(terra::ext(rgbi), crs = terra::crs(rgbi))
+      dem_data <- download_dem_for_aoi(aoi, output_dir, dem_channels = "DTM")
+      if (!is.null(dem_data)) {
+        dtm_aligned <- terra::resample(dem_data$dem[[1]], rgbi, method = "bilinear")
+        input_flair <- c(rgbi, dtm_aligned)
+      } else {
+        message("  [WARN] DEM non disponible, utilisation RGBI seul (4 bandes)")
+        input_flair <- rgbi
+      }
+    }
   } else {
     input_flair <- rgbi
   }
 
   # 2. Telecharger et charger le modele FLAIR
   message("  Telechargement du modele FLAIR: ", model_flair)
-  poids_flair <- telecharger_modele_flair(model_flair)
-  modele_flair <- charger_modele_flair(poids_flair, n_bands = terra::nlyr(input_flair))
+  fichiers_flair <- telecharger_modele_flair(model_flair)
+  chemin_poids <- fichiers_flair$weights %||% fichiers_flair$snapshot
+  if (is.null(chemin_poids)) {
+    stop("Impossible de trouver les poids du modele FLAIR.")
+  }
+
+  configurer_python()
+
+  modele <- charger_modele_flair(
+    chemin_poids,
+    n_classes = 19L,
+    in_channels = terra::nlyr(input_flair),
+    encoder = "resnet34",
+    decoder = "unet",
+    device = if (gpu) "cuda" else "cpu"
+  )
 
   # 3. Inference FLAIR
   message("  Inference FLAIR...")
   raster_flair <- executer_inference_flair(
-    modele_flair, input_flair,
+    input_flair, modele,
+    n_classes = 19L,
     utiliser_gpu = gpu
   )
 

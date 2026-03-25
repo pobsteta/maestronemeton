@@ -200,9 +200,12 @@ def charger_modele_flair(chemin_poids, n_classes=19, in_channels=4,
     model = _try_load_smp_model(encoder, decoder, in_channels, n_classes)
 
     if model is None:
-        print("  [INFO] segmentation_models_pytorch non disponible, "
-              "utilisation du UNet simplifie")
-        model = SimpleUNet(in_channels=in_channels, n_classes=n_classes)
+        raise ImportError(
+            "segmentation_models_pytorch est requis pour les modeles FLAIR. "
+            "Installez-le dans l'env conda maestro:\n"
+            "  conda activate maestro\n"
+            "  pip install segmentation-models-pytorch"
+        )
 
     # Charger les poids
     if chemin.suffix == ".safetensors":

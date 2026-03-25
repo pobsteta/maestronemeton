@@ -94,7 +94,8 @@ configurer_python <- function(envname = CONDA_ENV) {
 # @return invisible(NULL)
 # @keywords internal
 .verifier_modules_python <- function() {
-  modules <- c("torch", "numpy", "safetensors", "tifffile", "PIL")
+  modules <- c("torch", "numpy", "safetensors", "tifffile", "PIL",
+               "segmentation_models_pytorch")
   ok <- TRUE
   for (mod in modules) {
     avail <- reticulate::py_module_available(mod)
@@ -105,7 +106,8 @@ configurer_python <- function(envname = CONDA_ENV) {
   if (!ok) {
     stop("Modules Python manquants. Installez-les dans l'env 'maestro':\n",
          "  conda activate maestro\n",
-         "  pip install torch numpy safetensors tifffile Pillow")
+         "  pip install torch numpy safetensors tifffile Pillow ",
+         "segmentation-models-pytorch")
   }
 
   message("  Python configure.")
