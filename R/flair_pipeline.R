@@ -136,9 +136,10 @@ flair_pipeline <- function(aoi_path = "data/aoi.gpkg",
   )
 
   # 10. Assembler les resultats
+  classes_table <- if (n_classes <= 15L) classes_cosia_15() else classes_cosia()
   resultats <- assembler_resultats_flair(
     raster_classe,
-    classes = classes_cosia(),
+    classes = classes_table,
     dossier_sortie = output_dir
   )
 

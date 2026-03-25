@@ -46,6 +46,44 @@ classes_cosia <- function() {
   )
 }
 
+
+#' Classes CoSIA pour modeles FLAIR-INC 15 classes (0-based)
+#'
+#' Table des 15 classes utilisees par les modeles FLAIR-INC.
+#' Les codes sont 0-based (argmax du modele Python).
+#'
+#' @return Un data.frame avec les colonnes code, classe, couleur
+#' @export
+classes_cosia_15 <- function() {
+  data.frame(
+    code = 0:14,
+    classe = c(
+      "Batiment",
+      "Zone permeable",
+      "Zone impermeable",
+      "Sol nu",
+      "Eau",
+      "Conifere",
+      "Feuillu",
+      "Broussaille / lande",
+      "Vigne",
+      "Pelouse / prairie",
+      "Culture",
+      "Terre labouree",
+      "Serre / bache plastique",
+      "Piscine",
+      "Neige"
+    ),
+    couleur = c(
+      "#db0e9a", "#938e7b", "#f80c00", "#a97101", "#1553ae",
+      "#194a26", "#46e483", "#f3a60d", "#660082", "#55ff00",
+      "#fff30d", "#e4df7c", "#3de6eb", "#ffffff", "#c4b5d2"
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+
 #' Classes de cultures LPIS/RPG (23 classes)
 #'
 #' Table des 23 classes de cultures du jeu de donnees FLAIR-HUB,

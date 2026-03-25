@@ -47,6 +47,7 @@ export(calculer_composite_median)
 
 # --- FLAIR (occupation du sol) ---
 export(classes_cosia)
+export(classes_cosia_15)
 export(classes_lpis)
 export(flair_models)
 export(flair_pipeline)
