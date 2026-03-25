@@ -89,6 +89,9 @@ export(compute_gndvi)
 export(compute_savi)
 export(mask_vegetation)
 
+# --- Rapport ---
+export(generer_rapport)
+
 # --- Analyse et evaluation ---
 export(compute_landcover_stats)
 export(cross_landcover_dem)
