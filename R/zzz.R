@@ -36,24 +36,7 @@ NULL
 
 # Chercher le Python de l'env conda maestro sans charger reticulate
 .find_maestro_python <- function(envname = "maestro") {
-  conda_dirs <- if (.Platform$OS.type == "windows") {
-    home <- Sys.getenv("USERPROFILE", Sys.getenv("HOME"))
-    c(file.path(home, "miniforge3"),
-      file.path(home, "mambaforge"),
-      file.path(home, "miniconda3"),
-      file.path(home, "anaconda3"),
-      file.path(Sys.getenv("LOCALAPPDATA"), "miniforge3"),
-      file.path(Sys.getenv("PROGRAMDATA"), "miniforge3"))
-  } else {
-    home <- Sys.getenv("HOME")
-    c(file.path(home, "miniforge3"),
-      file.path(home, "mambaforge"),
-      file.path(home, "miniconda3"),
-      file.path(home, "anaconda3"),
-      "/opt/miniforge3",
-      "/opt/miniconda3")
-  }
-
+  conda_dirs <- .conda_search_dirs()
   for (conda_root in conda_dirs) {
     py_path <- if (.Platform$OS.type == "windows") {
       file.path(conda_root, "envs", envname, "python.exe")

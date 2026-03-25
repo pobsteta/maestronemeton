@@ -39,18 +39,10 @@
     }
   }
 
-  # Verification au chargement de reticulate
-  setHook(packageEvent("reticulate", "onLoad"), function(...) {
-    tryCatch({
-      cfg <- reticulate::py_config()
-      message("[maestro] Python actif: ", cfg$python)
-      message("[maestro] NumPy: ", if (reticulate::py_module_available("numpy")) "OK" else "MANQUANT")
-      message("[maestro] Torch: ", if (reticulate::py_module_available("torch")) "OK" else "MANQUANT")
-      message("[maestro] Safetensors: ", if (reticulate::py_module_available("safetensors")) "OK" else "MANQUANT")
-    }, error = function(e) {
-      message("[maestro] Attention: impossible de verifier Python - ", e$message)
-    })
-  })
+  # NB: Ne PAS appeler py_config() ou py_module_available() ici !
+  # Cela forcerait l'initialisation de Python avec le mauvais interpreteur
+  # (uv/reticulate au lieu de conda maestro). La verification des modules
+  # se fait dans configurer_python() au moment de l'inference.
 
   message("[maestro] Environnement configure. Token HF: ",
           if (nchar(Sys.getenv("HUGGING_FACE_HUB_TOKEN")) > 0) "OK" else "MANQUANT")
