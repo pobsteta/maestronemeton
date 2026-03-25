@@ -139,7 +139,7 @@ flair_pipeline <- function(aoi_path = "data/aoi.gpkg",
   # 10. Assembler les resultats (Python remappe toujours vers CoSIA 0-15)
   resultats <- assembler_resultats_flair(
     raster_classe,
-    classes = classes_table,
+    classes = classes_cosia(),
     dossier_sortie = output_dir
   )
 
