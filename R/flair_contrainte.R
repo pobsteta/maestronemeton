@@ -46,24 +46,23 @@ contraindre_par_flair <- function(raster_seg,
     raster_flair <- terra::resample(raster_flair, raster_seg, method = "near")
   }
 
-  # Classes CoSIA forestieres (0-based : argmax du modele Python)
-  # Correspondance : index 0-based = code classes_cosia() - 1
-  CLS_CONIFERE <- 5L   # "Conifere" = code CoSIA 6, index 5
-  CLS_FEUILLU  <- 6L   # "Feuillu" = code CoSIA 7, index 6
-  CLS_MIXTE    <- 16L  # "Mixte conifere+feuillu" = code 17, index 16
-  CLS_LIGNEUX  <- 17L  # "Ligneux" = code 18, index 17
-  CLS_COUPE    <- 15L  # "Coupe forestiere" = code 16, index 15
+  # Classes CoSIA (1-based, apres remapping Python FLAIR->CoSIA)
+  # Pour modeles 15 classes : codes 1-15
+  # Pour modeles 19 classes : codes 1-15 (classes 16-18 desactivees -> 0)
+  CLS_CONIFERE <- 14L  # "Conifere" (CoSIA 14)
+  CLS_FEUILLU  <- 13L  # "Feuillu" (CoSIA 13)
+  CLS_MIXTE    <- 0L   # "Mixte" -> desactive (remappe a 0) pour 19cl
+  CLS_LIGNEUX  <- 0L   # "Ligneux" -> desactive (remappe a 0) pour 19cl
+  CLS_COUPE    <- 0L   # "Coupe" -> desactive (remappe a 0) pour 19cl
 
   # Classes NDP0 par type
   ndp0_feuillus <- c(0L, 1L, 2L, 7L, 8L)  # Chene, Hetre, Chataignier, Peuplier, Feuillus divers
   ndp0_resineux <- c(3L, 4L, 5L, 6L)       # Pin, Epicea/Sapin, Douglas, Meleze
   ndp0_non_foret <- 9L
 
-  # Classes FLAIR considerees comme foret
-  cls_foret <- c(CLS_CONIFERE, CLS_FEUILLU)
-  if (garder_mixte) cls_foret <- c(cls_foret, CLS_MIXTE)
-  if (garder_ligneux) cls_foret <- c(cls_foret, CLS_LIGNEUX)
-  cls_foret <- c(cls_foret, CLS_COUPE)  # Coupe = zone forestiere temporairement deboisee
+  # Classes FLAIR considerees comme foret (codes CoSIA)
+  # Lande/broussaille (15) peut etre consideree comme vegetation forestiere
+  cls_foret <- c(CLS_CONIFERE, CLS_FEUILLU, 15L)  # Conifere + Feuillu + Lande
 
   # Extraire les valeurs
   seg_vals <- terra::values(raster_seg, na.rm = FALSE)[, 1]
@@ -103,11 +102,11 @@ contraindre_par_flair <- function(raster_seg,
   # Remplacer par Feuillus divers (classe generique)
   result_vals[mask_feu_resineux] <- 8L  # Feuillus divers par defaut
 
-  # 4. Pixels FLAIR = Mixte : garder la prediction MAESTRO (pas de contrainte)
-  # 5. Pixels FLAIR = Ligneux : garder la prediction MAESTRO
-  # 6. Pixels FLAIR = Coupe forestiere : forcer non-foret
-  mask_coupe <- !is.na(flair_vals) & flair_vals == CLS_COUPE
-  result_vals[mask_coupe] <- ndp0_non_foret
+  # 4. Pixels FLAIR = 0 (non classifie / classes desactivees) : garder MAESTRO
+  # Les classes Mixte, Ligneux, Coupe sont remappees a 0 par le modele FLAIR
+  # et ne declenchent pas de contrainte.
+  mask_non_classe <- !is.na(flair_vals) & flair_vals == 0L
+  n_non_classe <- sum(mask_non_classe & !is.na(seg_vals))
 
   n_inchange <- n_valid - n_non_foret - n_conifere_corr - n_feuillu_corr
 
@@ -123,7 +122,7 @@ contraindre_par_flair <- function(raster_seg,
       "Non-foret (FLAIR) -> NDP0=9",
       "Conifere (FLAIR) + feuillu (MAESTRO) -> resineux",
       "Feuillu (FLAIR) + resineux (MAESTRO) -> feuillu",
-      "Coupe forestiere -> non-foret",
+      "Non classifie (FLAIR=0)",
       "Inchanges"
     ),
     n_pixels = c(
@@ -131,7 +130,7 @@ contraindre_par_flair <- function(raster_seg,
       n_non_foret,
       n_conifere_corr,
       n_feuillu_corr,
-      sum(mask_coupe & !is.na(seg_vals) & seg_vals != ndp0_non_foret),
+      n_non_classe,
       n_inchange
     ),
     stringsAsFactors = FALSE

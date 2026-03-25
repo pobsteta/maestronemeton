@@ -2,10 +2,13 @@
 # Classes d'occupation du sol FLAIR-HUB
 # =============================================================================
 
-#' Classes d'occupation du sol CoSIA (19 classes)
+#' Classes d'occupation du sol CoSIA (15 classes actives + non classifie)
 #'
-#' Table des 19 classes d'occupation du sol du jeu de donnees FLAIR-HUB,
-#' issue de la photo-interpretation experte CoSIA (IGN).
+#' Table des classes d'occupation du sol CoSIA apres remapping
+#' depuis les codes FLAIR-1. Les classes desactivees (coupe, mixte,
+#' ligneux, autre) sont remappees a 0 (non classifie).
+#'
+#' Compatible avec la sortie des modeles 19 classes apres remapping.
 #'
 #' @return Un data.frame avec les colonnes code, classe, couleur
 #' @export
@@ -14,70 +17,92 @@
 #' cls[cls$code <= 5, ]
 classes_cosia <- function() {
   data.frame(
-    code = 1:19,
+    code = 0:15,
     classe = c(
+      "Non classifie",
       "Batiment",
-      "Zone permeable",
-      "Zone impermeable",
-      "Sol nu",
-      "Eau",
-      "Conifere",
-      "Feuillu",
-      "Broussaille / lande",
-      "Vigne",
-      "Pelouse / prairie",
-      "Culture",
-      "Terre labouree",
       "Serre / bache plastique",
       "Piscine",
+      "Zone impermeable",
+      "Zone permeable",
+      "Sol nu",
+      "Eau",
       "Neige",
-      "Coupe forestiere",
-      "Mixte (conifere + feuillu)",
-      "Ligneux (haie, bosquet)",
-      "Verger"
+      "Herbace / pelouse",
+      "Agricole / culture",
+      "Terre labouree",
+      "Vigne",
+      "Feuillu",
+      "Conifere",
+      "Lande / broussaille"
     ),
     couleur = c(
-      "#db0e9a", "#938e7b", "#f80c00", "#a97101", "#1553ae",
-      "#194a26", "#46e483", "#f3a60d", "#660082", "#55ff00",
-      "#fff30d", "#e4df7c", "#3de6eb", "#ffffff", "#c4b5d2",
-      "#8ab3a0", "#6b714f", "#c5dc42", "#9999ff"
+      "#808080",
+      "#db0e9a",
+      "#3de6eb",
+      "#ffffff",
+      "#f80c00",
+      "#938e7b",
+      "#a97101",
+      "#1553ae",
+      "#c4b5d2",
+      "#55ff00",
+      "#fff30d",
+      "#e4df7c",
+      "#660082",
+      "#46e483",
+      "#194a26",
+      "#f3a60d"
     ),
     stringsAsFactors = FALSE
   )
 }
 
 
-#' Classes CoSIA pour modeles FLAIR-INC 15 classes (0-based)
+#' Classes CoSIA pour modeles FLAIR-INC 15 classes
 #'
-#' Table des 15 classes utilisees par les modeles FLAIR-INC.
-#' Les codes sont 0-based (argmax du modele Python).
+#' Table des 15 classes utilisees par les modeles FLAIR-INC,
+#' avec codes CoSIA 1-indexed (apres remapping Python).
+#' Compatible avec la sortie de `predire_raster_complet()`.
 #'
 #' @return Un data.frame avec les colonnes code, classe, couleur
 #' @export
 classes_cosia_15 <- function() {
   data.frame(
-    code = 0:14,
+    code = 1:15,
     classe = c(
       "Batiment",
-      "Zone permeable",
-      "Zone impermeable",
-      "Sol nu",
-      "Eau",
-      "Conifere",
-      "Feuillu",
-      "Broussaille / lande",
-      "Vigne",
-      "Pelouse / prairie",
-      "Culture",
-      "Terre labouree",
       "Serre / bache plastique",
       "Piscine",
-      "Neige"
+      "Zone impermeable",
+      "Zone permeable",
+      "Sol nu",
+      "Eau",
+      "Neige",
+      "Herbace / pelouse",
+      "Agricole / culture",
+      "Terre labouree",
+      "Vigne",
+      "Feuillu",
+      "Conifere",
+      "Lande / broussaille"
     ),
     couleur = c(
-      "#db0e9a", "#938e7b", "#f80c00", "#a97101", "#1553ae",
-      "#194a26", "#46e483", "#f3a60d", "#660082", "#55ff00",
-      "#fff30d", "#e4df7c", "#3de6eb", "#ffffff", "#c4b5d2"
+      "#db0e9a",
+      "#3de6eb",
+      "#ffffff",
+      "#f80c00",
+      "#938e7b",
+      "#a97101",
+      "#1553ae",
+      "#c4b5d2",
+      "#55ff00",
+      "#fff30d",
+      "#e4df7c",
+      "#660082",
+      "#46e483",
+      "#194a26",
+      "#f3a60d"
     ),
     stringsAsFactors = FALSE
   )

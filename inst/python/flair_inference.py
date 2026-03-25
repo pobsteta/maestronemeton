@@ -43,9 +43,34 @@ COSIA_CLASSES = [
     "Verger",                # 19
 ]
 
-# Statistiques de normalisation (moyennes et ecarts-types des bandes RGBI)
-FLAIR_MEAN = [0.485, 0.456, 0.406, 0.5]
-FLAIR_STD = [0.229, 0.224, 0.225, 0.25]
+# Statistiques de normalisation FLAIR (valeurs brutes 0-255, dataset FLAIR)
+# R, G, B, NIR, Elevation
+FLAIR_MEAN = [105.08, 110.87, 101.82, 106.38, 53.26]
+FLAIR_STD = [52.17, 45.38, 44.0, 39.69, 79.3]
+
+# Remapping FLAIR-1 (19 classes, 0-indexed argmax) -> CoSIA (15 classes, 1-indexed)
+# Classes FLAIR 14 (coupe), 15 (mixte), 16 (ligneux), 18 (autre) -> 0 (non classifie)
+FLAIR_TO_COSIA = np.array([
+    1,   # FLAIR 0  (batiment)      -> CoSIA 1  (Batiment)
+    5,   # FLAIR 1  (permeable)     -> CoSIA 5  (Zone permeable)
+    4,   # FLAIR 2  (impermeable)   -> CoSIA 4  (Zone impermeable)
+    6,   # FLAIR 3  (sol nu)        -> CoSIA 6  (Sol nu)
+    7,   # FLAIR 4  (eau)           -> CoSIA 7  (Eau)
+    14,  # FLAIR 5  (conifere)      -> CoSIA 14 (Conifere)
+    13,  # FLAIR 6  (feuillu)       -> CoSIA 13 (Feuillu)
+    15,  # FLAIR 7  (broussaille)   -> CoSIA 15 (Lande)
+    12,  # FLAIR 8  (vigne)         -> CoSIA 12 (Vigne)
+    9,   # FLAIR 9  (herbace)       -> CoSIA 9  (Herbace)
+    10,  # FLAIR 10 (agricole)      -> CoSIA 10 (Agricole)
+    11,  # FLAIR 11 (laboure)       -> CoSIA 11 (Laboure)
+    3,   # FLAIR 12 (piscine)       -> CoSIA 3  (Piscine)
+    8,   # FLAIR 13 (neige)         -> CoSIA 8  (Neige)
+    0,   # FLAIR 14 (coupe)         -> 0 (desactive)
+    0,   # FLAIR 15 (mixte)         -> 0 (desactive)
+    0,   # FLAIR 16 (ligneux)       -> 0 (desactive)
+    2,   # FLAIR 17 (serre)         -> CoSIA 2  (Serre)
+    0,   # FLAIR 18 (autre)         -> 0 (desactive)
+], dtype=np.int32)
 
 
 # ---------------------------------------------------------------------------
@@ -198,15 +223,32 @@ def charger_modele_flair(chemin_poids, n_classes=19, in_channels=4,
         else:
             state_dict = checkpoint
 
-    # Nettoyer les prefixes courants
+    # Auto-detection du meilleur prefixe
+    # Tester plusieurs candidats et garder celui qui matche le plus de cles
+    candidate_prefixes = [
+        "", "model.", "net.", "module.", "backbone.",
+        "model.model.", "network.", "seg_model.",
+    ]
+    model_keys = set(model.state_dict().keys())
+    best_prefix = ""
+    best_match = 0
+
+    for prefix in candidate_prefixes:
+        n_match = sum(
+            1 for k in state_dict.keys()
+            if k[len(prefix):] in model_keys and k.startswith(prefix)
+        ) if prefix else sum(1 for k in state_dict.keys() if k in model_keys)
+        if n_match > best_match:
+            best_match = n_match
+            best_prefix = prefix
+
+    if best_prefix:
+        print("  Prefixe detecte: '%s' (%d cles)" % (best_prefix, best_match))
+
     cleaned = {}
     for k, v in state_dict.items():
-        # Supprimer les prefixes PyTorch Lightning
-        for prefix in ["model.", "net.", "module."]:
-            if k.startswith(prefix):
-                k = k[len(prefix):]
-                break
-        cleaned[k] = v
+        clean_k = k[len(best_prefix):] if best_prefix and k.startswith(best_prefix) else k
+        cleaned[clean_k] = v
 
     missing, unexpected = model.load_state_dict(cleaned, strict=False)
     if missing:
@@ -228,32 +270,29 @@ def charger_modele_flair(chemin_poids, n_classes=19, in_channels=4,
 # Normalisation
 # ---------------------------------------------------------------------------
 
-def _normaliser_rgbi(img, mean=None, std=None):
-    """Normalise un batch RGBI avec mean/std."""
+def _normaliser_flair(img, mean=None, std=None):
+    """Normalise un batch avec les statistiques FLAIR (valeurs brutes 0-255).
+
+    Args:
+        img: Tensor (B, C, H, W), valeurs brutes 0-255
+        mean: Liste de moyennes par canal (defaut: FLAIR_MEAN)
+        std: Liste d'ecarts-types par canal (defaut: FLAIR_STD)
+
+    Returns:
+        Tensor normalise (centre-reduit)
+    """
+    n_ch = img.shape[1]
     if mean is None:
-        n_ch = img.shape[1]
         mean = FLAIR_MEAN[:n_ch]
         std = FLAIR_STD[:n_ch]
 
-    # img: (B, C, H, W)
-    if img.max() > 1.0:
-        img = img / 255.0
-
+    # img: (B, C, H, W) - valeurs brutes 0-255, PAS de division par 255
     mean_t = torch.tensor(mean, dtype=img.dtype, device=img.device)
     std_t = torch.tensor(std, dtype=img.dtype, device=img.device)
     mean_t = mean_t.view(1, -1, 1, 1)
     std_t = std_t.view(1, -1, 1, 1)
 
     return (img - mean_t) / (std_t + 1e-8)
-
-
-def _normaliser_dem(dem):
-    """Normalise le DEM en min-max par batch."""
-    dmin = dem.min()
-    dmax = dem.max()
-    if dmax > dmin:
-        return (dem - dmin) / (dmax - dmin)
-    return torch.zeros_like(dem)
 
 
 # ---------------------------------------------------------------------------
@@ -313,14 +352,8 @@ def predire_patch_segmentation(modele, image_np, device="cpu"):
     n_ch = arr.shape[1]
     t = torch.from_numpy(arr).float()
 
-    # Normalisation
-    if n_ch <= 4:
-        t = _normaliser_rgbi(t)
-    elif n_ch >= 5:
-        # RGBI (4 bandes) + canaux terrain (1 ou 2 bandes)
-        t_rgbi = _normaliser_rgbi(t[:, :4])
-        t_dem = _normaliser_dem(t[:, 4:])
-        t = torch.cat([t_rgbi, t_dem], dim=1)
+    # Normalisation centre-reduit avec stats FLAIR
+    t = _normaliser_flair(t)
 
     t = t.to(device_t)
 
@@ -329,8 +362,17 @@ def predire_patch_segmentation(modele, image_np, device="cpu"):
         probs = F.softmax(logits, dim=1)
         classes = torch.argmax(probs, dim=1)  # (B, H, W)
 
+    classes_np = classes.squeeze(0).cpu().numpy()
+    n_cls = logits.shape[1]
+
+    # Remapper vers CoSIA
+    if n_cls == 19 and len(FLAIR_TO_COSIA) == 19:
+        classes_np = FLAIR_TO_COSIA[classes_np]
+    elif n_cls == 15:
+        classes_np = classes_np + 1
+
     return {
-        "classes": classes.squeeze(0).cpu().numpy(),
+        "classes": classes_np,
         "probabilites": probs.squeeze(0).cpu().numpy(),
     }
 
@@ -353,13 +395,8 @@ def predire_batch_segmentation(modele, batch_np, device="cpu"):
 
     t = torch.from_numpy(arr).float()
 
-    if n_ch <= 4:
-        t = _normaliser_rgbi(t)
-    elif n_ch >= 5:
-        # RGBI (4 bandes) + canaux terrain (1 ou 2 bandes: DTM, SLOPE, TWI, etc.)
-        t_rgbi = _normaliser_rgbi(t[:, :4])
-        t_dem = _normaliser_dem(t[:, 4:])
-        t = torch.cat([t_rgbi, t_dem], dim=1)
+    # Normalisation centre-reduit avec stats FLAIR
+    t = _normaliser_flair(t)
 
     t = t.to(device_t)
 
@@ -448,15 +485,9 @@ def predire_raster_complet(modele, image_np, patch_size=512, overlap=128,
         ])
 
         t = torch.from_numpy(batch).float()
-        n_ch = t.shape[1]
 
-        if n_ch <= 4:
-            t = _normaliser_rgbi(t)
-        elif n_ch >= 5:
-            # RGBI (4 bandes) + canaux terrain (1 ou 2 bandes)
-            t_rgbi = _normaliser_rgbi(t[:, :4])
-            t_dem = _normaliser_dem(t[:, 4:])
-            t = torch.cat([t_rgbi, t_dem], dim=1)
+        # Normalisation centre-reduit avec stats FLAIR
+        t = _normaliser_flair(t)
 
         t = t.to(device_t)
 
@@ -477,8 +508,15 @@ def predire_raster_complet(modele, image_np, patch_size=512, overlap=128,
     weight_sum = np.maximum(weight_sum, 1e-8)
     output_norm = output_sum / weight_sum
 
-    # Classe finale
+    # Classe finale (argmax 0-indexed)
     classes = np.argmax(output_norm, axis=0)  # (H, W)
+
+    # Remapper FLAIR-1 (0-18) vers CoSIA (1-15) si le modele a 19 classes
+    if n_classes == 19 and len(FLAIR_TO_COSIA) == 19:
+        classes = FLAIR_TO_COSIA[classes]
+    elif n_classes == 15:
+        # Modeles FLAIR-INC 15 classes : argmax 0-14 -> CoSIA 1-15
+        classes = classes + 1
 
     return classes
 
@@ -516,21 +554,21 @@ def classification_spectrale(image_np, n_classes=19):
         ndvi = (pir - rouge) / (pir + rouge + 1e-8)
         brightness = (rouge + vert + bleu) / 3.0
 
-        # Classification basique par seuillage
-        result[ndvi > 0.6] = 6    # Feuillu (forte vegetation)
-        result[ndvi > 0.3] = 9    # Pelouse/prairie
-        result[ndvi > 0.1] = 10   # Culture
-        result[(ndvi <= 0.1) & (brightness > 180)] = 0  # Batiment
-        result[(ndvi <= 0.1) & (brightness > 100)] = 2  # Zone impermeable
-        result[(ndvi <= 0.1) & (brightness <= 100)] = 3  # Sol nu
-        result[(ndvi < -0.1)] = 4  # Eau
+        # Classification basique par seuillage (codes CoSIA 1-indexed)
+        result[ndvi > 0.6] = 13   # Feuillu (CoSIA 13)
+        result[ndvi > 0.3] = 9    # Herbace/pelouse (CoSIA 9)
+        result[ndvi > 0.1] = 10   # Agricole (CoSIA 10)
+        result[(ndvi <= 0.1) & (brightness > 180)] = 1   # Batiment (CoSIA 1)
+        result[(ndvi <= 0.1) & (brightness > 100)] = 4   # Impermeable (CoSIA 4)
+        result[(ndvi <= 0.1) & (brightness <= 100)] = 6   # Sol nu (CoSIA 6)
+        result[(ndvi < -0.1)] = 7  # Eau (CoSIA 7)
     else:
         rouge = arr[0].astype(np.float64)
         vert = arr[1].astype(np.float64)
         bleu = arr[2].astype(np.float64)
         brightness = (rouge + vert + bleu) / 3.0
-        result[brightness > 180] = 0
-        result[(brightness > 100) & (brightness <= 180)] = 9
-        result[brightness <= 100] = 3
+        result[brightness > 180] = 1   # Batiment
+        result[(brightness > 100) & (brightness <= 180)] = 9  # Herbace
+        result[brightness <= 100] = 6   # Sol nu
 
     return result
