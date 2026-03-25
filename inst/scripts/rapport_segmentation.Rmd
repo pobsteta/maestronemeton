@@ -215,6 +215,12 @@ barplot(rep(1, nrow(cls)), horiz = TRUE, col = cls$couleur,
 ```{r segmentation, eval=params$run_segmentation}
 t_start <- Sys.time()
 
+# Configurer Python (gerer le cas ou hfhub l'a deja initialise)
+tryCatch(
+  configurer_python(),
+  error = function(e) message("  Note Python: ", e$message)
+)
+
 # Construire les modalites
 modalites <- list(aerial = rgbi)
 if (!is.null(dem_data)) modalites$dem <- dem_data$dem
@@ -234,7 +240,7 @@ if (params$use_s1 && exists("s1") && !is.null(s1)) {
 # Charger le segmenter
 segmenter <- charger_segmenter(
   backbone_path = params$backbone_path,
-  decoder_path = params$decoder_path,
+  decoder_path = normalizePath(params$decoder_path, mustWork = FALSE),
   modalites = names(modalites),
   gpu = params$gpu
 )
