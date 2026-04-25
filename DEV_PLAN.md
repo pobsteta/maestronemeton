@@ -223,26 +223,77 @@ hauteur de canopée brute apporte un gain métrologique notable.
 
 | Outil | Langage | Forces | Faiblesses |
 |-------|--------|--------|------------|
-| `lidR` | R | Idiomatique pour le pipeline R, `grid_metrics()`, `pixel_metrics()` complets, lecture LAZ via `rlas`. | Single-threaded sur grosses tuiles, gourmand en RAM (~6 Go pour 1 km²). |
+| **`lasR`** | R + C++ (r-universe) | Pipeline déclaratif C++ ultra-rapide, multi-tuile natif (`LAScatalog` + `buffer`), normalisation **TIN** via `transform_with(dtm_tri)` plus précise que la soustraction raster. | Distribué uniquement sur r-universe (`r-lidar.r-universe.dev`), API plus jeune. |
+| `lidR` | R | Idiomatique pour le pipeline R, `pixel_metrics()` complet, debug interactif facile, lecture LAZ via `rlas`. | Single-threaded sur grosses tuiles, gourmand en RAM (~6 Go pour 1 km²). |
 | `PDAL` | C++/CLI | Très rapide, pipelines JSON déclaratifs, parallélisme natif. | Dépendance externe à installer, pas R-natif (interface via `system2`). |
-| `whitebox` (WhiteboxTools) | Rust/CLI | Algorithmes de filtrage du sol robustes (Cloth Simulation), CHM par interpolation (`LidarTinGriddingMnh`). | Moins idiomatique R, communauté plus petite. |
+| `whitebox` (WhiteboxTools) | Rust/CLI | Algorithmes de filtrage du sol robustes (Cloth Simulation), CHM par interpolation. | Moins idiomatique R, communauté plus petite. |
 
 Choix recommandé :
-- Phase 2 (intégration LiDAR) : démarrer en **lidR** pour la simplicité
-  d'intégration au pipeline R existant et la possibilité de raisonner par
-  classe ASPRS.
-- Si volume > 100 km² ou besoin de production : **PDAL** via `system2()`.
+- **Phase 2 par défaut : `lasR`**. Le pattern d'usage est documenté dans le
+  tutoriel `inst/tutorials/07-lidar-advanced/07-lidar-advanced.Rmd` du dépôt
+  `pobsteta/nemeton`, qui produit MNT, MNS et MNH en un seul pipeline
+  déclaratif (cf. §3.3). Installation :
+  ```r
+  install.packages("lasR", repos = "https://r-lidar.r-universe.dev")
+  ```
+- `lidR` reste utile pour le **debug interactif** et les opérations point-par-point
+  hors pipeline (vérification visuelle, statistiques exploratoires).
+- `PDAL` ou `whitebox` ne sont à considérer que si on dépasse les capacités
+  de `lasR` (contraintes mémoire spécifiques, intégration outside-R).
 
-### 3.3 Calcul du CHM et statistiques
+### 3.3 Calcul du MNT, MNS et CHM via `lasR`
 
-- **DTM** : `lidR::rasterize_terrain(las, res=0.2, algorithm=tin())`, ou
-  WMS direct (RGE ALTI / LiDAR HD MNT à 1 m, ré-échantillonné à 0,2 m).
-- **DSM** : `lidR::rasterize_canopy(las, res=0.2, algorithm=p2r())` à partir
-  des points classés végétation haute (3, 4, 5) + sol (2). Quand on est en
-  mode WMS, la couche `IGNF_LIDAR-HD_MNS_...` est utilisée.
-- **CHM** = `DSM - DTM`. Valeurs négatives ramenées à 0 (artefacts de
-  ré-échantillonnage). Plafonné à 50 m comme borne supérieure pour les
-  forêts françaises.
+Pattern de référence issu de `pobsteta/nemeton`
+(`inst/tutorials/07-lidar-advanced/07-lidar-advanced.Rmd`, section 3) :
+
+```r
+library(lasR)
+
+# 1. Triangulation TIN sur les points classés sol (classe 2)
+dtm_tri <- triangulate(filter = keep_ground())
+dtm     <- rasterize(1, dtm_tri, ofile = "dtm_*.tif")
+
+# 2. Normalisation via le TIN sol (interpolation exacte par point,
+#    plus précise que la soustraction raster MNS - MNT)
+normalize <- transform_with(dtm_tri)
+
+# 3. Triangulation TIN sur les premiers retours pour le MNS
+chm_tri    <- triangulate(filter = keep_first())
+chm        <- rasterize(0.5, chm_tri, ofile = "chm_*.tif")
+chm_filled <- pit_fill(chm, ofile = "chm_filled_*.tif")
+
+# 4. Pipeline complet, parallélisé, avec buffer pour les effets de bord
+pipeline <- reader_las() + dtm_tri + dtm + normalize +
+            chm_tri + chm + chm_filled
+exec(pipeline, on = ctg, buffer = 20, ncores = concurrent_files(4))
+```
+
+Points clés :
+
+- **Normalisation TIN, pas raster**. `transform_with(dtm_tri)` interpole
+  l'altitude sol pour chaque point individuellement avant de le rasteriser.
+  C'est plus exact que `CHM = DSM - DTM` qui propage les artefacts de
+  discrétisation des deux rasters intermédiaires.
+- **MNT à 1 m, MNS/CHM à 0,5 m**. Le CHM bénéficie de la résolution
+  finesse pour la canopée ; le MNT n'a pas besoin de plus que 1 m. Pour
+  MAESTRO on ré-échantillonne ensuite à 0,2 m pour aligner sur la grille
+  aérienne.
+- **`pit_fill`** corrige les puits artefactuels (trous de profondeur ≥ 1 m
+  causés par la rareté des premiers retours). À conserver, gain visible
+  sur les forêts denses.
+- **Buffer 20 m** sur le `LAScatalog` : évite les effets de bord aux
+  coupures de tuiles (diamètre maximum des houppiers en France).
+- **Filtrage par classe ASPRS** :
+  - sol → classe 2 (`keep_ground()`)
+  - végétation haute → classes 3, 4, 5 (utilisable via
+    `keep_class(c(3, 4, 5))`)
+  - bâtiment → classe 6 (à exclure du MNS si on veut un MNH végétal pur)
+
+Quand on n'a pas accès aux LAZ (utilisateur final, AOI hors couverture
+LiDAR HD complet) : fallback sur les couches WMS Géoplateforme
+(`IGNF_LIDAR-HD_MNS_...` + `ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES`),
+qui sont elles-mêmes dérivées d'un pipeline équivalent côté IGN. La
+modalité `dem` MAESTRO accepte les deux sources de manière transparente.
 
 La modalité `dem` de MAESTRO peut être renseignée selon trois schémas
 d'arbitrage à valider expérimentalement (cf. §9) :
@@ -726,8 +777,9 @@ Tâches :
 - Implémenter `prepare_dem(aoi, source="wms")` qui construit `(DSM, DTM)`
   à partir des couches Géoplateforme, gère les zones non couvertes par
   LiDAR HD avec un fallback RGE ALTI 1 m + warning.
-- Implémenter `prepare_dem(aoi, source="las")` (LAS HD via lidR) en mode
-  optionnel.
+- Implémenter `prepare_dem(aoi, source="las")` (lecture LAZ via `lasR`,
+  pipeline `triangulate(keep_ground)` + `transform_with(dtm_tri)` +
+  `triangulate(keep_first)` + `pit_fill`, cf. §3.3) en mode optionnel.
 - Lors du pré-traitement PureForest : générer le DEM de chaque patch à
   partir des nuages LAZ fournis avec PureForest (déjà disponibles, pas de
   téléchargement supplémentaire). Laisser un script `prepare_pureforest_dem.py`
@@ -852,7 +904,7 @@ Aucune ne bloque la Phase 0 ni la Phase 1.
 | ID | Titre | Phase | T-shirt | Fichiers / modules impactés |
 |----|-------|-------|---------|-------------------------------|
 | P2-01 | `prepare_dem(aoi, source="wms")` couvrant DSM (LiDAR HD) + DTM (RGE ALTI) | P2 | M | `R/download_ign.R`, refactor `download_dem_for_aoi` |
-| P2-02 | `prepare_dem(aoi, source="las")` via lidR (lecture LAZ + DSM/DTM/CHM) | P2 | L | nouveau `R/lidar.R` |
+| P2-02 | `prepare_dem(aoi, source="las")` via **lasR** (pipeline TIN sol + premiers retours, normalisation `transform_with(dtm_tri)`, `pit_fill`, buffer 20 m, multi-tuile via `LAScatalog`) — pattern repris de `pobsteta/nemeton` `inst/tutorials/07-lidar-advanced` | P2 | L | nouveau `R/lidar.R`, ajouter `Imports: lasR` (ou `Suggests:` si r-universe pose problème en CI) |
 | P2-03 | Script `prepare_pureforest_dem.py` à partir des LAZ PureForest | P2 | M | nouveau |
 | P2-04 | Ajout modalité `dem` à `pureforest.yaml` + relance fine-tune | P2 | M | fork MAESTRO |
 | P2-05 | Ablation aerial vs aerial+dem | P2 | S | doc |
@@ -885,7 +937,7 @@ Aucune ne bloque la Phase 0 ni la Phase 1.
 |----|-------|-------|---------|-------------------------------|
 | TR-01 | Mettre `maestro_treesatai_best.pt` (344 Mo) hors dépôt (LFS ou stockage externe) | P0 | S | racine, `.gitignore`, `.gitattributes` |
 | TR-02 | Mettre en place CI (R CMD check + lint Python) | P0/P1 | M | `.github/workflows/ci.yml` |
-| TR-03 | Pin des versions Python (`torch`, `safetensors`, `tifffile`, `rasterio`, `lidR`) | P1 | S | `inst/python/requirements.txt` |
+| TR-03 | Pin des versions Python (`torch`, `safetensors`, `tifffile`, `rasterio`) et R (`lasR` via r-universe) | P1 | S | `inst/python/requirements.txt`, `DESCRIPTION` (Additional_repositories) |
 | TR-04 | Documenter la procédure HF token et Géoplateforme dans `README.md` | P0 | S | `README.md` |
 | TR-05 | Mode `dry-run` dans `maestro_pipeline()` (skip Python, valider seulement les téléchargements) | P1 | S | `R/pipeline.R` |
 
