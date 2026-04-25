@@ -14,7 +14,7 @@ le service WMS-R (pas de cle API necessaire).
 
 ```r
 # Depuis le depot Git
-devtools::install_github("pobsteta/maestro_nemeton")
+devtools::install_github("pobsteta/maestronemeton")
 
 # Ou localement
 devtools::install(".")
@@ -139,7 +139,7 @@ outputs/
 ## Structure du package
 
 ```
-maestro_nemeton/
+maestronemeton/
   DESCRIPTION
   NAMESPACE
   LICENSE

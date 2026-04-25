@@ -85,9 +85,9 @@ echo " MAESTRO - Fine-tuning PureForest (13 classes)"
 echo "========================================================"
 
 # --- Config ---
-REPO_URL="https://github.com/pobsteta/maestro_nemeton.git"
+REPO_URL="https://github.com/pobsteta/maestronemeton.git"
 BRANCH="${BRANCH:-main}"
-WORK_DIR="$HOME/maestro_nemeton"
+WORK_DIR="$HOME/maestronemeton"
 
 if [ -d /data ] && mountpoint -q /data 2>/dev/null; then
     DATA_DIR="${DATA_DIR:-/data/pureforest_maestro}"

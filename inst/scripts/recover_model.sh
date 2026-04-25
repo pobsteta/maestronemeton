@@ -101,8 +101,8 @@ mkdir -p "$LOCAL_DIR"
 echo ""
 log_info "=== Recuperation du modele ==="
 
-# Chercher le modele dans /data (volume) ou dans ~/maestro_nemeton (ancien chemin)
-REMOTE_DIR=$(ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" "if [ -d /data/outputs/training ]; then echo /data/outputs/training; else echo ~/maestro_nemeton/outputs/training; fi")
+# Chercher le modele dans /data (volume) ou dans ~/maestronemeton (ancien chemin)
+REMOTE_DIR=$(ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" "if [ -d /data/outputs/training ]; then echo /data/outputs/training; else echo ~/maestronemeton/outputs/training; fi")
 log_info "Repertoire distant : $REMOTE_DIR"
 
 # Lister les fichiers disponibles

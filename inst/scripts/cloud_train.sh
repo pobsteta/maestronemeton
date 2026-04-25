@@ -8,11 +8,11 @@
 # puis notifie que le modele est pret a etre recupere.
 #
 # Usage (sur l'instance GPU) :
-#   curl -sL https://raw.githubusercontent.com/pobsteta/maestro_nemeton/main/inst/scripts/cloud_train.sh | bash
+#   curl -sL https://raw.githubusercontent.com/pobsteta/maestronemeton/main/inst/scripts/cloud_train.sh | bash
 #
 # Ou manuellement :
-#   git clone https://github.com/pobsteta/maestro_nemeton.git
-#   cd maestro_nemeton
+#   git clone https://github.com/pobsteta/maestronemeton.git
+#   cd maestronemeton
 #   bash inst/scripts/cloud_train.sh
 #
 # Variables d'environnement (toutes optionnelles) :
@@ -103,9 +103,9 @@ echo "========================================================"
 echo ""
 
 # --- Config (surchargeables par variables d'environnement) ---
-REPO_URL="https://github.com/pobsteta/maestro_nemeton.git"
+REPO_URL="https://github.com/pobsteta/maestronemeton.git"
 BRANCH="${BRANCH:-main}"
-WORK_DIR="$HOME/maestro_nemeton"
+WORK_DIR="$HOME/maestronemeton"
 # Utiliser /data si le volume data est monte pour eviter de remplir le disque root
 if [ -d /data ] && mountpoint -q /data 2>/dev/null; then
     DATA_DIR="${DATA_DIR:-/data/treesatai}"

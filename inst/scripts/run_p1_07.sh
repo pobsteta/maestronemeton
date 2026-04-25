@@ -219,17 +219,17 @@ ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" bash <<REMOTE_EOF
     apt-get update -qq && apt-get install -y -qq tmux git >/dev/null 2>&1
 
     # Cloner le depot pour avoir une arbo coherente
-    if [ ! -d /root/maestro_nemeton ]; then
-        git clone https://github.com/pobsteta/maestro_nemeton.git /root/maestro_nemeton
+    if [ ! -d /root/maestronemeton ]; then
+        git clone https://github.com/pobsteta/maestronemeton.git /root/maestronemeton
     fi
 
     # Overlay des fichiers Python locaux (utiles si la branche distante est en retard)
-    cp -v /root/local_python/*.py /root/maestro_nemeton/inst/python/
-    mkdir -p /root/maestro_nemeton/inst/python/conf
-    cp -v /root/local_conf/*.yaml /root/maestro_nemeton/inst/python/conf/ 2>/dev/null || true
+    cp -v /root/local_python/*.py /root/maestronemeton/inst/python/
+    mkdir -p /root/maestronemeton/inst/python/conf
+    cp -v /root/local_conf/*.yaml /root/maestronemeton/inst/python/conf/ 2>/dev/null || true
 
     # Override le cloud_train_pureforest.sh local (au cas ou la branche est en retard)
-    cp -v /root/cloud_train_pureforest.sh /root/maestro_nemeton/inst/scripts/
+    cp -v /root/cloud_train_pureforest.sh /root/maestronemeton/inst/scripts/
 
     cat > /root/run_train.sh <<TRAIN_EOF
 #!/bin/bash
@@ -245,7 +245,7 @@ export MODALITIES=$MODALITIES
 export NOTIFY_EMAIL='${NOTIFY_EMAIL}'
 export NOTIFY_WEBHOOK='${NOTIFY_WEBHOOK}'
 export HUGGING_FACE_HUB_TOKEN='${HF_TOKEN}'
-cd /root/maestro_nemeton
+cd /root/maestronemeton
 bash inst/scripts/cloud_train_pureforest.sh 2>&1 | tee ~/train.log
 TRAIN_EOF
     chmod +x /root/run_train.sh

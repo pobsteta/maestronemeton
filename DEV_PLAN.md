@@ -1,6 +1,8 @@
-# Plan de développement — `maestro_nemeton`
+# Plan de développement — `maestronemeton`
 
-Reprise du dépôt R `maestro_nemeton` pour exploiter réellement le modèle MAESTRO
+Reprise du dépôt R `maestronemeton` (`github.com/pobsteta/maestronemeton`,
+souvent cloné en local sous le nom historique `maestro_nemeton/`) pour
+exploiter réellement le modèle MAESTRO
 de l'IGN sur les essences forestières françaises, avec ses six modalités
 natives (aérien 0,2 m, DEM/CHM, Sentinel-1 ascendant, Sentinel-1 descendant,
 Sentinel-2, et SPOT). Le plan ci-dessous part du code existant
@@ -81,7 +83,9 @@ gardant l'idée, `DELETE` = supprimer.
 - `data/treesatai/` (untracked) : dataset TreeSatAI extrait localement. À déplacer vers `data/external/` ou `~/.cache` et hors dépôt.
 - `maestro_treesatai_best.pt` (344 Mo, racine) : checkpoint binaire au cœur du repo, à déplacer en LFS ou stockage externe. Sera **déprécié** quand le checkpoint PureForest sera produit.
 - `outputs/` : produits temporaires, hors dépôt ; déjà ignoré par `.gitignore`.
-- `maestro_nemeton.Rproj` : nouveau fichier RStudio, à conserver.
+- `maestro_nemeton.Rproj` (ou `maestronemeton.Rproj` selon le nom du
+  répertoire local choisi par l'utilisateur après clone) : fichier RStudio,
+  non tracké, à conserver.
 
 ---
 

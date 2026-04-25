@@ -167,7 +167,7 @@ if $DRY_RUN; then
     echo "ssh root@\$IP 'EPOCHS=$EPOCHS BATCH_SIZE=$BATCH_SIZE bash ~/cloud_train.sh'"
     echo ""
     echo "# 5. Recuperer le modele"
-    echo "scp root@\$IP:~/maestro_nemeton/outputs/training/maestro_treesatai_best.pt ."
+    echo "scp root@\$IP:~/maestronemeton/outputs/training/maestro_treesatai_best.pt ."
     echo ""
     echo "# 6. Supprimer l'instance"
     echo "scw instance server terminate <SERVER_ID> zone=$ZONE with-ip=true"
@@ -326,10 +326,10 @@ export OUTPUT_DIR=/data/outputs/training
 export HF_HOME=/data/hf_cache
 bash ~/cloud_train.sh 2>&1 | tee ~/train.log.setup
 # Appliquer les fichiers Python locaux par-dessus le clone
-cp -v /root/local_python/maestro_inference.py /root/maestro_nemeton/inst/python/ 2>/dev/null
-cp -v /root/local_python/train_treesatai.py /root/maestro_nemeton/inst/legacy/ 2>/dev/null
+cp -v /root/local_python/maestro_inference.py /root/maestronemeton/inst/python/ 2>/dev/null
+cp -v /root/local_python/train_treesatai.py /root/maestronemeton/inst/legacy/ 2>/dev/null
 # Relancer seulement l'entrainement (deps + data deja prets)
-cd /root/maestro_nemeton
+cd /root/maestronemeton
 CKPT=\$(find /data/.cache/huggingface -name "pretrain-epoch=99.ckpt" 2>/dev/null | head -1)
 HF_HOME=/data/hf_cache /data/venv_maestro/bin/python inst/legacy/train_treesatai.py \
     --checkpoint "\$CKPT" \
