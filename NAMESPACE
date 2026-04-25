@@ -2,8 +2,8 @@
 
 # --- MAESTRO (essences forestieres) ---
 export(assembler_resultats)
-export(combine_rgbi_mnt)
 export(combine_rvb_irc)
+export(modalite_specs)
 export(CONDA_ENV)
 export(configurer_python)
 export(creer_carte_raster)
@@ -28,10 +28,7 @@ export(validate_wms_data)
 export(aligner_dem_sur_rgbi)
 export(taille_patch_modalite)
 
-# --- Fine-tuning (TreeSatAI) ---
-export(download_treesatai)
-export(download_treesatai_hf)
-export(finetune_maestro)
+# --- Fine-tuning (TreeSatAI) : archive (cf. inst/legacy/, DEV_PLAN.md phase 0) ---
 
 # --- Sentinel (S1, S2 via STAC Planetary Computer / rstac) ---
 export(s2_bands_config)

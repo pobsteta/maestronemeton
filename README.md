@@ -212,21 +212,23 @@ maestro_nemeton/
 
 ## Essences detectees (13 classes PureForest)
 
+Source : fiche dataset Hugging Face `IGNF/PureForest`.
+
 | Code | Essence | Nom latin | Type |
 |------|---------|-----------|------|
-| 0 | Chene decidue | *Quercus spp.* | Feuillu |
+| 0 | Chene decidu | *Quercus robur, Q. petraea, Q. pubescens* | Feuillu |
 | 1 | Chene vert | *Quercus ilex* | Feuillu |
 | 2 | Hetre | *Fagus sylvatica* | Feuillu |
 | 3 | Chataignier | *Castanea sativa* | Feuillu |
-| 4 | Pin maritime | *Pinus pinaster* | Resineux |
-| 5 | Pin sylvestre | *Pinus sylvestris* | Resineux |
-| 6 | Pin laricio/noir | *Pinus nigra* | Resineux |
-| 7 | Pin d'Alep | *Pinus halepensis* | Resineux |
-| 8 | Epicea | *Picea abies* | Resineux |
+| 4 | Robinier | *Robinia pseudoacacia* | Feuillu |
+| 5 | Pin maritime | *Pinus pinaster* | Resineux |
+| 6 | Pin sylvestre | *Pinus sylvestris* | Resineux |
+| 7 | Pin noir | *Pinus nigra* | Resineux |
+| 8 | Pin d'Alep | *Pinus halepensis* | Resineux |
 | 9 | Sapin | *Abies alba* | Resineux |
-| 10 | Douglas | *Pseudotsuga menziesii* | Resineux |
-| 11 | Meleze | *Larix spp.* | Resineux |
-| 12 | Peuplier | *Populus spp.* | Feuillu |
+| 10 | Epicea | *Picea abies* | Resineux |
+| 11 | Meleze | *Larix decidua, L. kaempferi* | Resineux |
+| 12 | Douglas | *Pseudotsuga menziesii* | Resineux |
 
 ## Donnees IGN
 
@@ -249,8 +251,10 @@ Code de telechargement adapte de
 
 ## Entrainement GPU sur Scaleway
 
-Le package inclut des scripts pour entrainer un modele fine-tune (TreeSatAI,
-8 classes) sur une instance GPU Scaleway.
+Le package inclut des scripts pour fine-tuner MAESTRO sur une instance GPU
+Scaleway (cible : PureForest 13 classes, cf. `DEV_PLAN.md`). Les scripts
+historiques TreeSatAI (8 classes regroupees) sont archives sous
+`inst/legacy/`.
 
 ### Deploiement depuis Windows (PowerShell)
 

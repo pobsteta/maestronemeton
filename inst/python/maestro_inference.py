@@ -28,24 +28,26 @@ import json
 
 
 # Classes d'essences forestieres PureForest (13 classes)
+# Source : fiche dataset Hugging Face IGNF/PureForest
 ESSENCES = [
-    "Chene decidue",       # 0 - Quercus spp. (deciduous)
+    "Chene decidu",        # 0 - Quercus robur, Q. petraea, Q. pubescens
     "Chene vert",          # 1 - Quercus ilex
     "Hetre",               # 2 - Fagus sylvatica
     "Chataignier",         # 3 - Castanea sativa
-    "Pin maritime",        # 4 - Pinus pinaster
-    "Pin sylvestre",       # 5 - Pinus sylvestris
-    "Pin laricio/noir",    # 6 - Pinus nigra
-    "Pin d'Alep",          # 7 - Pinus halepensis
-    "Epicea",              # 8 - Picea abies
+    "Robinier",            # 4 - Robinia pseudoacacia
+    "Pin maritime",        # 5 - Pinus pinaster
+    "Pin sylvestre",       # 6 - Pinus sylvestris
+    "Pin noir",            # 7 - Pinus nigra
+    "Pin d'Alep",          # 8 - Pinus halepensis
     "Sapin",               # 9 - Abies alba
-    "Douglas",             # 10 - Pseudotsuga menziesii
-    "Meleze",              # 11 - Larix spp.
-    "Peuplier",            # 12 - Populus spp.
+    "Epicea",              # 10 - Picea abies
+    "Meleze",              # 11 - Larix decidua, L. kaempferi
+    "Douglas",             # 12 - Pseudotsuga menziesii
 ]
 
-# Classes regroupees TreeSatAI (7 classes) - schema simplifie
-# Utilise pour le fine-tuning tant que le LiDAR n'est pas integre
+# Classes regroupees TreeSatAI (7 classes) - LEGACY
+# Conserve uniquement pour les checkpoints fine-tunes pre-PureForest.
+# Ne pas utiliser pour de nouveaux entrainements (cf. DEV_PLAN.md).
 ESSENCES_TREESATAI = [
     "Chene",              # 0 - Quercus spp.
     "Hetre",              # 1 - Fagus sylvatica
@@ -833,7 +835,7 @@ def predire_batch(modele, images_np, device="cpu"):
     return preds.tolist()
 
 
-def predire_batch_from_values(modele, values_np, patch_h=250, patch_w=250,
+def predire_batch_from_values(modele, values_np, patch_h=256, patch_w=256,
                                device="cpu"):
     """
     Predit les essences depuis des matrices de valeurs terra (H*W, C).

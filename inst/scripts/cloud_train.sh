@@ -96,7 +96,9 @@ except Exception as e:
 
 echo "========================================================"
 echo " MAESTRO - Entrainement GPU sur Scaleway"
-echo " TreeSatAI -> 8 classes regroupees"
+echo " (script legacy TreeSatAI -> 8 classes regroupees,"
+echo "  cible PureForest 13 classes en cours de migration"
+echo "  cf. DEV_PLAN.md phase 1)"
 echo "========================================================"
 echo ""
 
@@ -235,7 +237,7 @@ Vous recevrez une notification quand ce sera termine."
 N_WORKERS=$(nproc --ignore=2 2>/dev/null || echo 4)
 N_WORKERS=$((N_WORKERS > 8 ? 8 : N_WORKERS))
 
-$PYTHON inst/python/train_treesatai.py \
+$PYTHON inst/legacy/train_treesatai.py \
     --checkpoint "$CHECKPOINT" \
     --data-dir "$DATA_DIR" \
     --output-dir "$OUTPUT_DIR" \
