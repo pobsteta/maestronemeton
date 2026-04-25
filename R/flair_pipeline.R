@@ -74,7 +74,7 @@ flair_pipeline <- function(aoi_path = "data/aoi.gpkg",
   input_raster <- rgbi
 
   if (use_dem) {
-    dem_data <- download_dem_for_aoi(aoi, output_dir, rgbi = rgbi)
+    dem_data <- prepare_dem(aoi, output_dir, rgbi = rgbi, source = "wms")
     if (!is.null(dem_data)) {
       dem <- aligner_dem_sur_rgbi(dem_data$dem, rgbi)
       # Prendre seulement la premiere bande du DEM (CHM ou DTM)

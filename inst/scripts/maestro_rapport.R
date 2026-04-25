@@ -287,7 +287,7 @@ rgbi <- combine_rvb_irc(ortho$rvb, ortho$irc)
 
 # --- 1d. Telecharger DEM (DSM + DTM, 2 bandes) pour le rapport ---
 message("\n=== Telechargement DEM (DSM + DTM) ===")
-dem_data <- download_dem_for_aoi(aoi, output_dir, rgbi = rgbi)
+dem_data <- prepare_dem(aoi, output_dir, rgbi = rgbi, source = "wms")
 
 # --- 1e. Image RGBI (modalite aerial MAESTRO) ---
 # Le DEM n'est PAS empile a RGBI : MAESTRO traite les modalites separement.
@@ -319,8 +319,8 @@ if (lancer_inference) {
     # Preparer les modalites pour l'inference multi-modale
     modalites_inf <- list(aerial = rgbi)
     modalites_noms <- c("aerial")
-    if (!is.null(mnt_data)) {
-      dem <- aligner_dem_sur_rgbi(mnt_data$mnt, rgbi)
+    if (!is.null(dem_data)) {
+      dem <- aligner_dem_sur_rgbi(dem_data$dem, rgbi)
       modalites_inf$dem <- dem
       modalites_noms <- c(modalites_noms, "dem")
     }

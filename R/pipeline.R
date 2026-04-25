@@ -130,12 +130,14 @@ maestro_pipeline <- function(aoi_path = "data/aoi.gpkg",
       stop("La modalite 'dem' doit etre extraite sur la grille aerial : ",
            "demande aussi aerial dans `modalites`.")
     }
-    dem_data <- download_dem_for_aoi(aoi, output_dir,
-                                       rgbi = rasters$aerial)
+    dem_data <- prepare_dem(aoi, output_dir,
+                             rgbi = rasters$aerial,
+                             source = "wms")
     if (!is.null(dem_data)) {
       rasters$dem <- aligner_dem_sur_rgbi(dem_data$dem, rasters$aerial)
-      message(sprintf("  dem    : 2 bandes (DSM source : %s)",
-                       dem_data$dsm_source))
+      message(sprintf("  dem    : 2 bandes (DSM source : %s, couverture LiDAR HD : %.1f %%)",
+                       dem_data$dsm_source,
+                       dem_data$lidar_hd_coverage_pct))
     } else {
       modalites <- setdiff(modalites, "dem")
       warning("DEM indisponible, modalite 'dem' retiree du pipeline")

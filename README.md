@@ -40,12 +40,11 @@ maestro_pipeline("data/aoi.gpkg",
                   millesime_ortho = 2023,
                   millesime_irc = 2023)
 
-# Ou etape par etape
+# Ou etape par etape (modalites separees)
 aoi   <- load_aoi("data/aoi.gpkg")
 ortho <- download_ortho_for_aoi(aoi, "outputs/", millesime_ortho = 2023)
-rgbi  <- combine_rvb_irc(ortho$rvb, ortho$irc)
-mnt   <- download_mnt_for_aoi(aoi, "outputs/", rgbi = rgbi)
-image <- combine_rgbi_mnt(rgbi, mnt$mnt)
+rgbi  <- combine_rvb_irc(ortho$rvb, ortho$irc)        # modalite aerial (4ch)
+dem   <- prepare_dem(aoi, "outputs/", rgbi = rgbi)    # modalite dem (DSM, DTM)
 # ... inference, export
 ```
 
@@ -146,8 +145,8 @@ maestronemeton/
   data/                   # Placer aoi.gpkg ici
   R/
     aoi.R            # load_aoi()
-    combine.R        # combine_rvb_irc(), combine_rgbi_mnt()
-    download_ign.R   # download_ortho_for_aoi(), download_mnt_for_aoi(), ...
+    combine.R        # combine_rvb_irc(), aligner_dem_sur_rgbi()
+    download_ign.R   # download_ortho_for_aoi(), prepare_dem(), ...
     essences.R       # essences_pureforest()
     export.R         # assembler_resultats(), creer_carte_raster()
     inference.R      # configurer_python(), executer_inference()
@@ -171,9 +170,9 @@ maestronemeton/
 | `maestro_pipeline()` | Pipeline complet AOI -> carte des essences |
 | `load_aoi()` | Charger un GeoPackage et reprojeter en Lambert-93 |
 | `download_ortho_for_aoi()` | Telecharger ortho RVB + IRC depuis IGN |
-| `download_mnt_for_aoi()` | Telecharger MNT RGE ALTI 1m depuis IGN |
-| `combine_rvb_irc()` | Combiner RVB + IRC en image 4 bandes RGBI |
-| `combine_rgbi_mnt()` | Ajouter le MNT comme 5eme bande |
+| `prepare_dem()` | Preparer la modalite dem MAESTRO (DSM LiDAR HD + DTM RGE ALTI) |
+| `combine_rvb_irc()` | Combiner RVB + IRC en image 4 bandes RGBI (modalite aerial) |
+| `aligner_dem_sur_rgbi()` | Reechantillonner le DEM 2 bandes sur la grille aerial |
 | `telecharger_modele()` | Telecharger le modele depuis Hugging Face |
 | `configurer_python()` | Configurer l'environnement Python |
 | `creer_grille_patches()` | Creer la grille de patches pour l'inference |
