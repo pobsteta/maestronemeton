@@ -767,6 +767,25 @@ Tâches :
 - Réécrire `maestro_pipeline()` pour appeler ce checkpoint sur une AOI
   réelle (sans modalités Sentinel).
 
+**Statut réel (mis à jour Phase 2)** :
+
+L'infrastructure (DataLoader, script de fine-tune, CLI Scaleway, pipeline R
+inférence) a été livrée dans la première itération du commit
+`5a32cc5`. Mais le pré-traitement `prepare_pureforest_aerial.py` reposait
+sur `datasets.load_dataset("IGNF/PureForest")`, ce qui ne marche pas :
+le dataset HF n'est pas formaté en parquet/arrow, c'est une collection de
+36 ZIP files (`data/imagery-<species>.zip` × 18 et `data/lidar-<species>.zip` × 18)
+plus `metadata/PureForest-patches.csv`. **Aucun fine-tune n'a donc été
+effectivement lancé.** Le ticket P1-03 a été refait au début de Phase 2
+pour télécharger les ZIP via `hf_hub_download`, parser le CSV pour les
+splits/labels, et extraire les patches en `patches/<id>/aerial.tif`.
+Smoke test validé localement sur Quercus_rubra (20 patches, 12 Mo).
+
+Tickets P1-03 et P1-07 restent donc à valider en run réel avant de
+considérer Phase 1 terminée. Phase 2 peut néanmoins avancer en parallèle
+sur P2-03 (`prepare_pureforest_dem.py`) puisque l'architecture du nouveau
+preprocessing aerial sert de patron.
+
 Critère de sortie :
 - `balanced_accuracy_test ≥ 0.50` (à confirmer comme cible réaliste à
   partir des baselines du papier PureForest).
