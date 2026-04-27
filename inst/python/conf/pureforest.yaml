@@ -17,7 +17,7 @@ datasets:
     task_type: single_label_classification
 
     # Modalites filtrables via `datasets.pureforest.filter_inputs=[aerial,dem]`
-    filter_inputs: [aerial]
+    filter_inputs: [aerial, dem]
 
     splits:
       train: train

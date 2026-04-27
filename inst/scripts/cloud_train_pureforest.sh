@@ -140,7 +140,8 @@ $PYTHON -m pip install --quiet --upgrade pip
 $PYTHON -m pip install --quiet \
     torch numpy safetensors \
     rasterio tifffile pillow \
-    huggingface_hub datasets pyarrow pandas tqdm
+    huggingface_hub pandas pyarrow tqdm \
+    laspy lazrs scipy
 
 echo
 echo "=== Verification GPU ==="
@@ -155,15 +156,21 @@ else:
     print('ATTENTION: pas de GPU')
 "
 
-# --- Preparation du dataset (idempotent) ---
-if [ ! -d "$DATA_DIR/patches" ] || [ -z "$(ls -A "$DATA_DIR/patches" 2>/dev/null)" ]; then
+# --- Preparation du dataset (idempotent par modalite) ---
+echo
+echo "=== Pre-traitement PureForest aerial (~25 Go zip + ~50 Go patches) ==="
+$PYTHON inst/python/prepare_pureforest_aerial.py \
+    --output "$DATA_DIR" \
+    --cache "$HF_HOME"
+
+# La modalite dem est generee si elle est demandee dans MODALITIES.
+# Le script est idempotent : reutilise les patches dem.tif deja presents.
+if echo ",$MODALITIES," | grep -q ",dem,"; then
     echo
-    echo "=== Pre-traitement PureForest (long, ~50 Go) ==="
-    $PYTHON inst/python/prepare_pureforest_aerial.py \
+    echo "=== Pre-traitement PureForest dem (LAZ -> DSM/DTM, ~120 Go zip + ~3 Go patches) ==="
+    $PYTHON inst/python/prepare_pureforest_dem.py \
         --output "$DATA_DIR" \
         --cache "$HF_HOME"
-else
-    echo "  Dataset deja pre-traite : $DATA_DIR"
 fi
 
 # --- Telechargement checkpoint pre-entraine ---
