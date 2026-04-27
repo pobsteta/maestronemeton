@@ -291,10 +291,13 @@ bash inst/scripts/recover_model.sh
 
 ### Prediction apres entrainement
 
+Le checkpoint produit par `cloud_train_pureforest.sh` est sauvegarde
+sous `outputs/training/maestro_pureforest_best.pt` (13 classes).
+
 ```bash
 Rscript inst/scripts/predict_from_checkpoint.R \
     --aoi data/aoi.gpkg \
-    --checkpoint outputs/training/maestro_treesatai_best.pt
+    --checkpoint outputs/training/maestro_pureforest_best.pt
 ```
 
 ## References

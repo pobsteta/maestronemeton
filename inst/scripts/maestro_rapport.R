@@ -14,7 +14,7 @@
 #   Rscript inst/scripts/maestro_rapport.R --inference
 #   Rscript inst/scripts/maestro_rapport.R --inference --gpu
 #   Rscript inst/scripts/maestro_rapport.R --millesime 2023
-#   Rscript inst/scripts/maestro_rapport.R --checkpoint outputs/training/maestro_treesatai_best.pt
+#   Rscript inst/scripts/maestro_rapport.R --checkpoint outputs/training/maestro_pureforest_best.pt
 # =============================================================================
 
 # --- Packages requis ---

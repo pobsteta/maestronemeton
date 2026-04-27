@@ -137,11 +137,14 @@ source "$VENV_DIR/bin/activate"
 PYTHON="$VENV_DIR/bin/python"
 
 $PYTHON -m pip install --quiet --upgrade pip
+# Versions pinees au minor : reproductibilite tout en laissant les patchs de
+# securite passer. Une version trop stricte (==X.Y.Z) casse des qu'une release
+# est retiree de PyPI ; trop laxe (sans borne haute) laisse derive.
 $PYTHON -m pip install --quiet \
-    torch numpy safetensors \
-    rasterio tifffile pillow \
-    huggingface_hub pandas pyarrow tqdm \
-    laspy lazrs scipy
+    'torch>=2.5,<3' 'numpy>=1.26,<3' 'safetensors>=0.4,<1' \
+    'rasterio>=1.3,<2' 'tifffile>=2023.1' 'pillow>=10,<13' \
+    'huggingface_hub>=0.20,<2' 'tqdm>=4.65,<5' \
+    'laspy>=2.5,<3' 'lazrs>=0.5,<1' 'scipy>=1.10,<2'
 
 echo
 echo "=== Verification GPU ==="

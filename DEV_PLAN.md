@@ -958,9 +958,9 @@ Aucune ne bloque la Phase 0 ni la Phase 1.
 
 | ID | Titre | Phase | T-shirt | Fichiers / modules impactés |
 |----|-------|-------|---------|-------------------------------|
-| TR-01 | Mettre `maestro_treesatai_best.pt` (344 Mo) hors dépôt (LFS ou stockage externe) | P0 | S | racine, `.gitignore`, `.gitattributes` |
+| TR-01 | ✅ Constat : `maestro_treesatai_best.pt` (344 Mo) **n'a jamais été tracké** par git (la règle `*.pt` du `.gitignore` était déjà en place dès l'origine du repo). Le diagnostic Phase 0 surestimait l'urgence. Doc nettoyée pour pointer le nouveau filename `maestro_pureforest_best.pt`. | P0 | S | racine, `.gitignore` |
 | TR-02 | Mettre en place CI (R CMD check + lint Python) | P0/P1 | M | `.github/workflows/ci.yml` |
-| TR-03 | Pin des versions Python (`torch`, `safetensors`, `tifffile`, `rasterio`) et R (`lasR` via r-universe) | P1 | S | `inst/python/requirements.txt`, `DESCRIPTION` (Additional_repositories) |
+| TR-03 | ✅ Versions Python pinnées au minor (`>=X.Y,<Z`) dans `inst/scripts/cloud_train_pureforest.sh`. `lasR` déjà piloté via `Additional_repositories` (P2-02). Pandas/pyarrow retirés (non utilisés par les nouveaux scripts de pré-traitement). | P1 | S | `inst/scripts/cloud_train_pureforest.sh`, `DESCRIPTION` |
 | TR-04 | Documenter la procédure HF token et Géoplateforme dans `README.md` | P0 | S | `README.md` |
 | TR-05 | Mode `dry-run` dans `maestro_pipeline()` (skip Python, valider seulement les téléchargements) | P1 | S | `R/pipeline.R` |
 
