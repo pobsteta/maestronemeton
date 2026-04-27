@@ -414,8 +414,14 @@ def entrainer(args):
         enc = "s1" if mod_name.startswith("s1_") else mod_name
         prefixes.append(f"model.encoder.{enc}.")
 
-    filtered = {k: v for k, v in state_dict.items()
-                if any(k.startswith(p) for p in prefixes)}
+    filtered = {}
+    model_sd = modele.state_dict()
+    for k, v in state_dict.items():
+        if not any(k.startswith(p) for p in prefixes):
+            continue
+        if k in model_sd and model_sd[k].shape != v.shape:
+            continue
+        filtered[k] = v
     missing, unexpected = modele.load_state_dict(filtered, strict=False)
     head_missing = [k for k in missing if k.startswith("head.")]
     other_missing = [k for k in missing if not k.startswith("head.")]

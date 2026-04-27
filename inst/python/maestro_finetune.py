@@ -490,8 +490,14 @@ def finetuner(checkpoint_path, data_dir, output_path,
         prefixes.append("model.encoder.%s." % enc_name)
 
     prefix_tuple = tuple(prefixes)
-    filtered_sd = {k: v for k, v in state_dict.items()
-                   if k.startswith(prefix_tuple)}
+    model_sd = model.state_dict()
+    filtered_sd = {}
+    for k, v in state_dict.items():
+        if not k.startswith(prefix_tuple):
+            continue
+        if k in model_sd and model_sd[k].shape != v.shape:
+            continue
+        filtered_sd[k] = v
 
     missing, unexpected = model.load_state_dict(filtered_sd, strict=False)
     missing_head = [k for k in missing if k.startswith("head.")]
