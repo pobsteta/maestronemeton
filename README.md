@@ -258,18 +258,22 @@ historiques TreeSatAI (8 classes regroupees) sont archives sous
 ### Deploiement depuis Windows (PowerShell)
 
 ```powershell
-# Pre-requis : CLI Scaleway (scw init) + OpenSSH
+# Pre-requis : CLI Scaleway (scw init) + OpenSSH + Git
 
 # Test a blanc (voir les commandes sans executer)
 .\inst\scripts\deploy_scaleway.ps1 -DryRun
 
-# Lancer avec un GPU RTX 3070 (defaut, ~2 EUR pour 30 epochs)
+# Aerial seul, defauts (L4-1-24G, batch 24, probe 10 + finetune 50)
 .\inst\scripts\deploy_scaleway.ps1
 
-# Avec un GPU L4 pour le multi-modal
-.\inst\scripts\deploy_scaleway.ps1 -InstanceType L4-1-24G -Epochs 50
+# Aerial + DEM (active prepare_pureforest_dem.py + LAZ download)
+.\inst\scripts\deploy_scaleway.ps1 -Modalities "aerial,dem"
 
-# Recuperer le modele entraine
+# Avec notification email/webhook
+.\inst\scripts\deploy_scaleway.ps1 -Modalities "aerial,dem" `
+    -NotifyEmail mon@email.fr -NotifyWebhook https://ntfy.sh/maestro-train
+
+# Recuperer le modele entraine + le rapport
 .\inst\scripts\recover_model.ps1
 
 # Ou avec l'IP directement
@@ -282,8 +286,11 @@ historiques TreeSatAI (8 classes regroupees) sont archives sous
 # Test a blanc
 bash inst/scripts/deploy_scaleway.sh --dry-run
 
-# Lancer l'entrainement
+# Aerial seul (defauts)
 bash inst/scripts/deploy_scaleway.sh
+
+# Aerial + DEM
+bash inst/scripts/deploy_scaleway.sh --modalities aerial,dem
 
 # Recuperer le modele
 bash inst/scripts/recover_model.sh

@@ -1,32 +1,39 @@
 # =============================================================================
 # deploy_scaleway.ps1
-# Deploiement de l'entrainement MAESTRO sur une instance GPU Scaleway (Windows).
+# Deploie le fine-tuning MAESTRO sur PureForest (13 classes) sur une instance
+# GPU Scaleway depuis Windows. Cible cloud_train_pureforest.sh (P1 + P2).
 #
 # Ce script est execute DEPUIS VOTRE PC WINDOWS. Il :
 #   1. Cree une instance GPU Scaleway (via CLI scw)
-#   2. Envoie le script d'entrainement sur l'instance
-#   3. Lance l'entrainement en arriere-plan (tmux)
+#   2. Monte le volume data sur /data
+#   3. Envoie cloud_train_pureforest.sh, le lance dans tmux avec les
+#      env vars adaptees (BRANCH, MODALITIES, PROBE_EPOCHS, ...)
 #   4. Donne les commandes pour suivre et recuperer le modele
+#
+# Le script distant est self-contained : il clone la branche choisie,
+# installe les deps Python pinnees (TR-03), pre-traite PureForest aerial
+# + dem (si MODALITIES contient dem), et lance pureforest_finetune.py.
 #
 # Pre-requis :
 #   - CLI Scaleway installee (scw init)
 #   - Client SSH (OpenSSH integre a Windows 10+)
-#   - SCP disponible (integre avec OpenSSH)
+#   - Git installe (pour detecter la branche locale courante)
+#   - Le code a deployer doit etre **pousse sur le remote**
 #
 # Usage :
 #   .\inst\scripts\deploy_scaleway.ps1
-#   .\inst\scripts\deploy_scaleway.ps1 -InstanceType L4-1-24G -Epochs 50
+#   .\inst\scripts\deploy_scaleway.ps1 -Modalities "aerial,dem"
+#   .\inst\scripts\deploy_scaleway.ps1 -InstanceType L4-1-24G -ProbeEpochs 5 -FinetuneEpochs 30
 #   .\inst\scripts\deploy_scaleway.ps1 -NotifyEmail mon@email.fr
 #   .\inst\scripts\deploy_scaleway.ps1 -NotifyWebhook https://ntfy.sh/maestro-train
 #   .\inst\scripts\deploy_scaleway.ps1 -DryRun
 #
-# Instances GPU Scaleway recommandees (verifiez la disponibilite avec scw instance server-type list) :
-#   RENDER-S : GPU (petit)  - entree de gamme
-#   L4-1-24G : NVIDIA L4 (24 Go VRAM) - bon rapport qualite/prix
-#   H100-1-80G : H100 (80 Go VRAM) - entrainement rapide
+# Instances GPU Scaleway recommandees :
+#   GPU-3070-S : RTX 3070 (8 Go VRAM)   - aerial seul, batch 16
+#   L4-1-24G   : NVIDIA L4 (24 Go VRAM) - aerial+dem, batch 24
+#   H100-1-80G : H100 (80 Go VRAM)      - entrainement rapide
 #
-# Listez les types disponibles dans votre zone :
-#   scw instance server-type list zone=fr-par-2 | findstr -i gpu
+# Cout estime aerial+dem (probe 10 + finetune 50, L4-1-24G) : ~14-18h, 13-17 EUR
 # =============================================================================
 
 [CmdletBinding()]
@@ -35,16 +42,27 @@ param(
     [string]$Image = "ubuntu_jammy_gpu_os_12",
     [string]$Zone = "fr-par-2",
     [string]$InstanceName = "maestro-train",
-    [int]$Epochs = 30,
-    [int]$BatchSize = 64,
-    [string]$LR = "1e-3",
-    [string]$Modalites = "aerial",
-    [int]$DataVolumeGB = 100,
-    [switch]$Unfreeze,
+    [string]$Branch = "",
+    [string]$Modalities = "aerial",
+    [int]$ProbeEpochs = 10,
+    [int]$FinetuneEpochs = 50,
+    [int]$BatchSize = 24,
+    [int]$Patience = 5,
+    [int]$DataVolumeGB = 200,
     [string]$NotifyEmail = "",
     [string]$NotifyWebhook = "",
     [switch]$DryRun
 )
+
+# Detection automatique de la branche locale courante si non fournie.
+if (-not $Branch) {
+    try {
+        $Branch = (git rev-parse --abbrev-ref HEAD 2>$null).Trim()
+        if (-not $Branch) { $Branch = "main" }
+    } catch {
+        $Branch = "main"
+    }
+}
 
 $ErrorActionPreference = "Stop"
 
@@ -60,16 +78,19 @@ Write-Host " MAESTRO - Deploiement GPU sur Scaleway (Windows)"
 Write-Host "========================================================"
 Write-Host ""
 Log-Info "Configuration :"
-Write-Host "  Instance type : $InstanceType"
-Write-Host "  Image         : $Image"
-Write-Host "  Zone          : $Zone"
-Write-Host "  Nom           : $InstanceName"
-Write-Host "  Epochs        : $Epochs"
-Write-Host "  Batch size    : $BatchSize"
-Write-Host "  Learning rate : $LR"
-Write-Host "  Modalites     : $Modalites"
-Write-Host "  Volume data   : ${DataVolumeGB} Go"
-Write-Host "  Unfreeze      : $(if ($Unfreeze) { 'oui' } else { 'non' })"
+Write-Host "  Instance type   : $InstanceType"
+Write-Host "  Image           : $Image"
+Write-Host "  Zone            : $Zone"
+Write-Host "  Nom             : $InstanceName"
+Write-Host "  Volume data     : ${DataVolumeGB} Go"
+Write-Host "  Branche git     : $Branch"
+Write-Host "  Modalites       : $Modalities"
+Write-Host "  Probe epochs    : $ProbeEpochs"
+Write-Host "  Fine-tune epochs: $FinetuneEpochs"
+Write-Host "  Batch size      : $BatchSize"
+Write-Host "  Patience        : $Patience"
+if ($NotifyEmail -ne "")   { Write-Host "  Notify email    : $NotifyEmail" }
+if ($NotifyWebhook -ne "") { Write-Host "  Notify webhook  : (defini)" }
 Write-Host ""
 
 # --- Verifier les pre-requis ---
@@ -115,7 +136,7 @@ if ($DryRun) {
     Log-Warn "[DRY-RUN] Commandes qui seraient executees :"
     Write-Host ""
     Write-Host "# 1. Creer l'instance"
-    Write-Host "scw instance server create type=$InstanceType image=$Image zone=$Zone name=$InstanceName ip=new -o json"
+    Write-Host "scw instance server create type=$InstanceType image=$Image zone=$Zone name=$InstanceName ip=new additional-volumes.0=block:${DataVolumeGB}GB -o json"
     Write-Host ""
     Write-Host "# 2. Attendre que l'instance soit prete"
     Write-Host "scw instance server wait <SERVER_ID> zone=$Zone"
@@ -123,14 +144,21 @@ if ($DryRun) {
     Write-Host "# 3. Recuperer l'IP"
     Write-Host "scw instance server get <SERVER_ID> zone=$Zone -o json"
     Write-Host ""
-    Write-Host "# 4. Copier et lancer le script d'entrainement"
-    Write-Host "scp inst\scripts\cloud_train.sh root@<IP>:~/"
-    Write-Host "ssh root@<IP> 'EPOCHS=$Epochs BATCH_SIZE=$BatchSize bash ~/cloud_train.sh'"
+    Write-Host "# 4. Monter le volume data sur /data"
+    Write-Host "scp inst\scripts\mount_data.sh root@<IP>:~/"
+    Write-Host "ssh root@<IP> 'bash ~/mount_data.sh'"
     Write-Host ""
-    Write-Host "# 5. Recuperer le modele"
-    Write-Host "scp root@<IP>:~/maestro_nemeton/outputs/training/maestro_treesatai_best.pt ."
+    Write-Host "# 5. Copier et lancer le script d'entrainement (cloud_train_pureforest.sh)"
+    Write-Host "scp inst\scripts\cloud_train_pureforest.sh root@<IP>:~/"
+    Write-Host "ssh root@<IP> 'BRANCH=$Branch MODALITIES=$Modalities ``"
+    Write-Host "    PROBE_EPOCHS=$ProbeEpochs FINETUNE_EPOCHS=$FinetuneEpochs ``"
+    Write-Host "    BATCH_SIZE=$BatchSize PATIENCE=$Patience ``"
+    Write-Host "    bash ~/cloud_train_pureforest.sh'"
     Write-Host ""
-    Write-Host "# 6. Supprimer l'instance"
+    Write-Host "# 6. Recuperer le modele"
+    Write-Host "scp root@<IP>:/data/outputs/training/maestro_pureforest_best.pt ."
+    Write-Host ""
+    Write-Host "# 7. Supprimer l'instance"
     Write-Host "scw instance server terminate <SERVER_ID> zone=$Zone with-ip=true"
     exit 0
 }
@@ -352,30 +380,27 @@ ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "sed -i 's/\r$//' ~/mou
 
 # --- Etape 4 : Deployer et lancer l'entrainement ---
 Write-Host ""
-Log-Info "=== Etape 4 : Deploiement de l'entrainement ==="
+Log-Info "=== Etape 4 : Deploiement de cloud_train_pureforest.sh ==="
 
-# Copier le script d'entrainement
-Log-Info "Envoi du script d'entrainement..."
-scp -o StrictHostKeyChecking=accept-new "$RepoRoot\inst\scripts\cloud_train.sh" "root@${PublicIP}:~/"
+# Copier le script d'entrainement (cloud_train_pureforest.sh est self-contained :
+# clone branche, pip install pinne, prepare aerial[+dem], finetune)
+Log-Info "Envoi du script d'entrainement PureForest..."
+scp -o StrictHostKeyChecking=accept-new "$RepoRoot\inst\scripts\cloud_train_pureforest.sh" "root@${PublicIP}:~/"
 
-# Convertir les fins de ligne CRLF -> LF (le fichier vient de Windows)
+# Convertir CRLF -> LF (le fichier vient de Windows ; bash plante sinon)
 Log-Info "Conversion des fins de ligne CRLF -> LF..."
-ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "sed -i 's/\r$//' ~/cloud_train.sh"
+ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "sed -i 's/\r$//' ~/cloud_train_pureforest.sh"
 
-# Preparer le flag unfreeze
-$UnfreezeVal = $(if ($Unfreeze) { "1" } else { "" })
-
-# Lancer l'entrainement dans tmux
-# Note : eviter les here-strings PowerShell (@"..."@) car elles envoient des CRLF via SSH
-Log-Info "Installation de tmux sur l'instance..."
-# Note : utiliser `$null pour echapper le $ PowerShell dans /dev/null
+# Installer tmux + msmtp si notif email demandee
 $PkgList = "tmux"
 if ($NotifyEmail -ne "") {
     $PkgList = "tmux msmtp msmtp-mta"
     Log-Info "Installation de msmtp pour notification email vers $NotifyEmail"
 }
+Log-Info "Installation de $PkgList sur l'instance..."
 ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "apt-get update -qq && apt-get install -y -qq $PkgList > /dev/`$null 2>&1"
 
+# Construire la commande tmux : env vars adaptees au cloud_train_pureforest.sh
 Log-Info "Lancement de l'entrainement dans tmux..."
 $NotifyExport = ""
 if ($NotifyEmail -ne "") {
@@ -384,7 +409,7 @@ if ($NotifyEmail -ne "") {
 if ($NotifyWebhook -ne "") {
     $NotifyExport += "export NOTIFY_WEBHOOK=$NotifyWebhook; "
 }
-$TmuxCmd = "export EPOCHS=$Epochs; export BATCH_SIZE=$BatchSize; export LR=$LR; export MODALITES=$Modalites; export UNFREEZE=$UnfreezeVal; ${NotifyExport}bash ~/cloud_train.sh 2>&1 | tee ~/train.log"
+$TmuxCmd = "export BRANCH=$Branch; export MODALITIES=$Modalities; export PROBE_EPOCHS=$ProbeEpochs; export FINETUNE_EPOCHS=$FinetuneEpochs; export BATCH_SIZE=$BatchSize; export PATIENCE=$Patience; ${NotifyExport}bash ~/cloud_train_pureforest.sh 2>&1 | tee ~/train.log"
 ssh -o StrictHostKeyChecking=accept-new "root@$PublicIP" "tmux new-session -d -s maestro '$TmuxCmd'"
 
 # Verifier que la session tmux existe
@@ -436,8 +461,9 @@ Write-Host ""
 Write-Host "  # Verifier l'espace disque :"
 Write-Host "  ssh root@$PublicIP 'df -h /data'"
 Write-Host ""
-Write-Host "  # Recuperer le modele entraine :"
-Write-Host "  scp root@${PublicIP}:/data/outputs/training/maestro_treesatai_best.pt ."
+Write-Host "  # Recuperer le modele entraine + le rapport :"
+Write-Host "  scp root@${PublicIP}:/data/outputs/training/maestro_pureforest_best.pt ."
+Write-Host "  scp root@${PublicIP}:/data/outputs/training/maestro_pureforest_best.report.json ."
 Write-Host ""
 Write-Host "  # Ou utiliser le script de recuperation :"
 Write-Host "  .\inst\scripts\recover_model.ps1"
