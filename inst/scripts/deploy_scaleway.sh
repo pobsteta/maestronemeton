@@ -24,7 +24,7 @@
 #   --epochs N             Nombre d'epochs (defaut: 30)
 #   --batch-size N         Taille batch (defaut: 64)
 #   --lr FLOAT             Learning rate (defaut: 1e-3)
-#   --modalites MODS       Modalites (defaut: aerial)
+#   --modalites MODS       Modalites (defaut: aerial). Alias: --modalities
 #   --unfreeze             Degeler le backbone (fine-tuning complet)
 #   --segmentation         Mode segmentation (decodeur NDP0 au lieu de TreeSatAI)
 #   --aoi AOI_PATH         Chemin local vers l'AOI (mode segmentation)
@@ -85,7 +85,7 @@ while [[ $# -gt 0 ]]; do
         --epochs)        EPOCHS="$2"; shift 2 ;;
         --batch-size)    BATCH_SIZE="$2"; shift 2 ;;
         --lr)            LR="$2"; shift 2 ;;
-        --modalites)     MODALITES="$2"; shift 2 ;;
+        --modalites|--modalities) MODALITES="$2"; shift 2 ;;
         --unfreeze)      UNFREEZE="--unfreeze"; shift ;;
         --segmentation)  SEGMENTATION=true; shift ;;
         --flair)         FLAIR_NIVEAU="$2"; SEGMENTATION=true; shift 2 ;;
