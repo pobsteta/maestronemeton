@@ -320,47 +320,66 @@ download_ortho_for_aoi <- function(aoi, output_dir,
 #' Preparer la modalite `dem` MAESTRO pour une AOI (DSM + DTM)
 #'
 #' Construit le raster 2 bandes attendu par la modalite `dem` du modele
-#' MAESTRO : `(DSM, DTM)` dans cet ordre. Le DTM provient du RGE ALTI 1 m
-#' (couverture nationale, couche WMS `ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES`).
-#' Le DSM provient du LiDAR HD IGN (couverture partielle en cours de
-#' completion d'ici 2026, couche `IGNF_LIDAR-HD_MNS_ELEVATION...`).
+#' MAESTRO : `(DSM, DTM)` dans cet ordre. Deux sources sont supportees :
 #'
-#' Quand le LiDAR HD ne couvre pas l'AOI (couverture < `coverage_threshold`),
-#' deux strategies sont possibles selon `allow_dtm_only_fallback` :
+#' **`source = "wms"`** (defaut) : DTM depuis le RGE ALTI 1 m (couverture
+#' nationale, couche WMS `ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES`),
+#' DSM depuis le LiDAR HD IGN (couverture partielle en cours de completion
+#' d'ici 2026, couche `IGNF_LIDAR-HD_MNS_ELEVATION...`). Quand le LiDAR HD
+#' ne couvre pas l'AOI (couverture < `coverage_threshold`), deux strategies
+#' selon `allow_dtm_only_fallback` :
 #' - `TRUE` (defaut) : duplique le DTM comme DSM avec un warning explicite.
 #'   Le CHM (DSM - DTM) sera plat, ce qui degrade le signal pour MAESTRO.
 #'   A reserver aux mode degrade ou tests d'integration.
 #' - `FALSE` : retourne `NULL` pour que l'appelant retire la modalite `dem`
 #'   du pipeline et evite d'injecter des donnees corrompues dans le modele.
 #'
-#' Pour la suite (P2-02), `source = "las"` derivara DSM et DTM directement
-#' des nuages LAZ via `lasR` (cf. DEV_PLAN.md S3.3).
+#' **`source = "las"`** : derivation directe via [lasR][lasR::lasR-package]
+#' a partir des nuages LAZ fournis dans `las_files`. Pipeline TIN sol +
+#' premiers retours, buffer 20 m sur le `LAScatalog`, mosaiquage et crop
+#' sur l'AOI, resample sur la grille aerial. Le telechargement automatique
+#' des tuiles LAZ depuis l'IGN n'est pas (encore) couvert : les chemins
+#' sont a fournir explicitement (cf. catalogue cartes.gouv.fr).
 #'
 #' @param aoi sf object en Lambert-93.
 #' @param output_dir Repertoire de sortie (ecrit `dem_2bands.tif`).
 #' @param rgbi SpatRaster aerial de reference pour le reechantillonnage a
 #'   0,2 m (NULL = garde la resolution native 1 m).
-#' @param source `"wms"` (defaut) pour Geoplateforme IGN. `"las"` reserve
-#'   a P2-02 (derivation locale via lasR).
+#' @param source `"wms"` (defaut) pour Geoplateforme IGN. `"las"` pour
+#'   derivation locale via lasR a partir de `las_files`.
 #' @param coverage_threshold Pourcentage minimum de pixels LiDAR HD valides
-#'   pour considerer la couverture suffisante (defaut : 10).
-#' @param allow_dtm_only_fallback Si TRUE et couverture insuffisante,
-#'   utilise DSM = DTM (warning) ; sinon retourne NULL.
+#'   pour considerer la couverture suffisante en mode WMS (defaut : 10).
+#' @param allow_dtm_only_fallback Mode WMS uniquement. Si TRUE et couverture
+#'   insuffisante, utilise DSM = DTM (warning) ; sinon retourne NULL.
+#' @param las_files Mode `"las"` uniquement : vecteur de chemins vers les
+#'   tuiles LAZ/LAS a traiter (1 km x 1 km IGN typiquement).
+#' @param ncores Mode `"las"` uniquement : nombre de coeurs paralleles
+#'   pour le pipeline lasR (defaut : 2).
 #' @return Liste avec
 #'   - `dem` : SpatRaster 2 bandes nommees `DSM`, `DTM`
 #'   - `dem_path` : chemin du GeoTIFF ecrit
-#'   - `dsm_source` : `"lidar_hd"` | `"rge_alti_fallback"` | `"cache"`
-#'   - `lidar_hd_coverage_pct` : couverture LiDAR HD mesuree (numeric)
-#'   Renvoie NULL si le DTM RGE ALTI ne peut pas etre telecharge ou si
-#'   le LiDAR HD est insuffisant et `allow_dtm_only_fallback = FALSE`.
+#'   - `dsm_source` : `"lidar_hd"` | `"rge_alti_fallback"` | `"lasR"` | `"cache"`
+#'   - `lidar_hd_coverage_pct` : couverture LiDAR HD mesuree (mode WMS) ou
+#'     NA (mode LAS)
+#'   Renvoie NULL si le DTM RGE ALTI ne peut pas etre telecharge (mode WMS),
+#'   ou si le LiDAR HD est insuffisant et `allow_dtm_only_fallback = FALSE`.
 #' @export
 prepare_dem <- function(aoi, output_dir, rgbi = NULL,
                         source = c("wms", "las"),
                         coverage_threshold = 10,
-                        allow_dtm_only_fallback = TRUE) {
+                        allow_dtm_only_fallback = TRUE,
+                        las_files = NULL,
+                        ncores = 2L) {
   source <- match.arg(source)
   if (source == "las") {
-    stop("source = 'las' n'est pas encore implemente (ticket P2-02 du DEV_PLAN).")
+    if (is.null(las_files) || length(las_files) == 0L) {
+      stop("source = 'las' requiert l'argument `las_files` ",
+           "(vecteur de chemins vers des fichiers LAZ/LAS).")
+    }
+    return(prepare_dem_las(
+      aoi = aoi, las_files = las_files,
+      output_dir = output_dir, rgbi = rgbi, ncores = ncores
+    ))
   }
 
   fs::dir_create(output_dir)

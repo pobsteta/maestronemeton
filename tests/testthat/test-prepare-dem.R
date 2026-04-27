@@ -167,13 +167,73 @@ test_that("prepare_dem reechantillonne sur la grille rgbi a 0,2 m si fournie", {
   expect_equal(terra::nrow(res$dem), terra::nrow(rgbi))
 })
 
-test_that("prepare_dem source = 'las' n'est pas encore implemente (P2-02)", {
+test_that("prepare_dem source = 'las' rejette l'absence de las_files", {
   aoi <- .aoi_test()
   out_dir <- withr::local_tempdir()
   expect_error(
     prepare_dem(aoi, out_dir, source = "las"),
-    regexp = "P2-02"
+    regexp = "las_files"
   )
+  expect_error(
+    prepare_dem(aoi, out_dir, source = "las", las_files = character()),
+    regexp = "las_files"
+  )
+})
+
+test_that("prepare_dem source = 'las' rejette les fichiers inexistants", {
+  aoi <- .aoi_test()
+  out_dir <- withr::local_tempdir()
+  fake <- file.path(out_dir, "absent.laz")
+
+  if (requireNamespace("lasR", quietly = TRUE)) {
+    expect_error(
+      prepare_dem(aoi, out_dir, source = "las", las_files = fake),
+      regexp = "introuvables"
+    )
+  } else {
+    expect_error(
+      prepare_dem(aoi, out_dir, source = "las", las_files = fake),
+      regexp = "lasR"
+    )
+  }
+})
+
+test_that("prepare_dem source = 'las' produit DSM + DTM via lasR sur un LAZ reel", {
+  skip_if_not_installed("lasR")
+  laz_dir <- "/tmp/laz_test"
+  laz_files <- list.files(laz_dir, pattern = "\\.laz$", full.names = TRUE)
+  skip_if(length(laz_files) == 0L,
+          "Aucun LAZ disponible dans /tmp/laz_test (smoke test optionnel).")
+
+  # AOI englobant le patch Quercus_rubra (bbox connue : ~961900, 6793650, 50 m x 50 m).
+  aoi <- sf::st_sf(geometry = sf::st_sfc(
+    sf::st_polygon(list(matrix(c(
+      961880, 6793630,
+      961970, 6793630,
+      961970, 6793720,
+      961880, 6793720,
+      961880, 6793630
+    ), ncol = 2, byrow = TRUE))), crs = 2154))
+
+  out_dir <- withr::local_tempdir()
+  res <- suppressMessages(prepare_dem(
+    aoi = aoi,
+    output_dir = out_dir,
+    source = "las",
+    las_files = laz_files[1],
+    ncores = 1L
+  ))
+
+  expect_s4_class(res$dem, "SpatRaster")
+  expect_equal(terra::nlyr(res$dem), 2L)
+  expect_equal(names(res$dem), c("DSM", "DTM"))
+  expect_equal(res$dsm_source, "lasR")
+  expect_true(is.na(res$lidar_hd_coverage_pct))
+
+  # Verifier que le DSM est >= au DTM (canopee >= sol partout)
+  vals <- terra::values(res$dem)
+  finite <- is.finite(vals[, 1]) & is.finite(vals[, 2])
+  expect_true(any(vals[finite, 1] >= vals[finite, 2]))
 })
 
 test_that("prepare_dem rejette une source inconnue", {

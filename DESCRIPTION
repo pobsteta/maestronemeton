@@ -34,9 +34,12 @@ Suggests:
     patchwork,
     scales,
     hfhub,
+    lasR,
     optparse,
     rmarkdown,
     knitr,
     testthat (>= 3.0.0)
+Additional_repositories:
+    https://r-lidar.r-universe.dev
 VignetteBuilder: knitr
 Config/testthat/edition: 3
