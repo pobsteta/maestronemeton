@@ -1,9 +1,15 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^\.git$
+^\.github$
 ^\.gitignore$
 ^\.Renviron$
+^\.Renviron\.txt$
 ^\.Rprofile$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^DEV_PLAN\.md$
 ^LICENSE\.md$
 ^README\.Rmd$
 ^maestro_essences\.R$

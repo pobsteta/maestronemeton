@@ -491,6 +491,9 @@ maestro_segmentation_pipeline <- function(aoi_path = "data/aoi.gpkg",
 #' @param annees_sentinel Vecteur d'annees pour composite
 #' @param saison Saison cible
 #' @param max_scenes_par_annee Nombre max de scenes par annee
+#' @param dem_channels Vecteur de noms de canaux DEM parmi
+#'   `c("DSM", "DTM", "SLOPE", "ASPECT", "TPI", "TWI")`. Defaut :
+#'   `c("SLOPE", "TWI")`.
 #' @return Liste avec n_train, n_val, n_skipped
 #' @export
 preparer_donnees_segmentation <- function(aoi_path = "data/aoi.gpkg",

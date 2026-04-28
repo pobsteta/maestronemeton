@@ -30,9 +30,9 @@ Imports:
     fs,
     jsonlite,
     reticulate,
-    rstac,
-    happign
+    rstac
 Suggests:
+    happign,
     ggplot2,
     patchwork,
     scales,

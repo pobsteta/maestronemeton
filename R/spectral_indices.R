@@ -10,7 +10,7 @@
 #' @param rgbi SpatRaster avec bandes R, G, B, NIR (ou 2 bandes PIR, Rouge)
 #' @param nir_band Indice de la bande PIR (defaut: 4 pour RGBI)
 #' @param red_band Indice de la bande Rouge (defaut: 1 pour RGBI)
-#' @return SpatRaster mono-bande avec valeurs NDVI [-1, 1]
+#' @return SpatRaster mono-bande avec valeurs NDVI entre -1 et 1
 #' @export
 #' @examples
 #' \dontrun{
@@ -33,7 +33,7 @@ compute_ndvi <- function(rgbi, nir_band = 4L, red_band = 1L) {
 #' @param rgbi SpatRaster avec bandes R, G, B, NIR
 #' @param nir_band Indice de la bande PIR (defaut: 4)
 #' @param green_band Indice de la bande Verte (defaut: 2)
-#' @return SpatRaster mono-bande avec valeurs GNDVI [-1, 1]
+#' @return SpatRaster mono-bande avec valeurs GNDVI entre -1 et 1
 #' @export
 compute_gndvi <- function(rgbi, nir_band = 4L, green_band = 2L) {
   pir <- rgbi[[nir_band]]

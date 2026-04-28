@@ -249,6 +249,9 @@ executer_inference <- function(patches_data, fichiers_modele, n_classes = 13L,
 #'   (defaut: `c("aerial", "dem")`)
 #' @param utiliser_gpu Utiliser le GPU CUDA (defaut: FALSE)
 #' @param batch_size Taille des batchs pour l'inference (defaut: 16)
+#' @param checkpoint Chemin vers un checkpoint fine-tune `*.pt`/`*.ckpt`/
+#'   `*.safetensors`. Si fourni, charge ce checkpoint plutot que le modele
+#'   referencee par `fichiers_modele$weights`.
 #' @return Liste de predictions (codes de classes 0-12)
 #' @export
 executer_inference_multimodal <- function(patches_multimodal, fichiers_modele,
