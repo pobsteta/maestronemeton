@@ -34,7 +34,7 @@
     py <- file.path(d, py_suffix)
     if (file.exists(py)) {
       Sys.setenv(RETICULATE_PYTHON = py)
-      message("[maestro] Python: ", py)
+      message("[maestronemeton] Python: ", py)
       break
     }
   }
@@ -44,6 +44,6 @@
   # (uv/reticulate au lieu de conda maestro). La verification des modules
   # se fait dans configurer_python() au moment de l'inference.
 
-  message("[maestro] Environnement configure. Token HF: ",
+  message("[maestronemeton] Environnement configure. Token HF: ",
           if (nchar(Sys.getenv("HUGGING_FACE_HUB_TOKEN")) > 0) "OK" else "MANQUANT")
 }

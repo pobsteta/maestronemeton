@@ -94,6 +94,7 @@ reference:
   - find_checkpoint_name
   - python_module_path
   - configurer_python
+  - CONDA_ENV
 
 - title: Modeles FLAIR (segmentation pixel)
   desc: Modeles UNet/UPerNet d'occupation du sol.
