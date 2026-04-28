@@ -2,7 +2,7 @@
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/pobsteta/maestronemeton/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/pobsteta/maestronemeton/actions/workflows/R-CMD-check.yaml)
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg?logo=github)](https://github.com/pobsteta/maestronemeton/releases/tag/v0.2.0)
+[![Version](https://img.shields.io/github/v/release/pobsteta/maestronemeton?logo=github&label=version)](https://github.com/pobsteta/maestronemeton/releases/latest)
 [![pkgdown](https://github.com/pobsteta/maestronemeton/actions/workflows/pkgdown.yaml/badge.svg)](https://pobsteta.github.io/maestronemeton/)
 [![codecov](https://codecov.io/gh/pobsteta/maestronemeton/graph/badge.svg)](https://codecov.io/gh/pobsteta/maestronemeton)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?logo=opensourceinitiative)](https://opensource.org/licenses/MIT)
