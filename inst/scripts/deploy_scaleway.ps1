@@ -42,7 +42,7 @@
     Learning rate (defaut: 1e-3)
 
 .PARAMETER Modalites
-    Modalites (defaut: aerial)
+    Modalites (defaut: aerial). Alias : -Modalities
 
 .PARAMETER Unfreeze
     Degeler le backbone (fine-tuning complet)
@@ -97,6 +97,7 @@ param(
     [int]$Epochs = 30,
     [int]$BatchSize = 64,
     [string]$LR = "1e-3",
+    [Alias("Modalities")]
     [string]$Modalites = "aerial",
     [int]$DataVolumeGB = 100,
     [switch]$Unfreeze,
