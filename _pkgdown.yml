@@ -1,0 +1,167 @@
+url: https://pobsteta.github.io/maestronemeton/
+
+template:
+  bootstrap: 5
+  bslib:
+    primary: "#2E7D32"
+    base_font: {google: "Inter"}
+    heading_font: {google: "Inter"}
+    code_font: {google: "JetBrains Mono"}
+
+home:
+  title: maestronemeton — Reconnaissance des essences forestieres et occupation du sol
+  description: >
+    Pipeline R + Python pour la classification d'essences forestieres
+    (PureForest 13 classes) et de l'occupation du sol (CoSIA 19 classes)
+    avec les modeles MAESTRO et FLAIR de l'IGN.
+
+navbar:
+  structure:
+    left:  [intro, articles, reference, news]
+    right: [search, github]
+  components:
+    intro:
+      text: Get started
+      href: articles/getting-started.html
+    articles:
+      text: Articles
+      menu:
+      - text: Getting started
+        href: articles/getting-started.html
+      - text: Pipeline Python (MAESTRO / FLAIR)
+        href: articles/python-pipeline.html
+    reference:
+      text: Reference
+      href: reference/index.html
+
+reference:
+- title: Pipelines de bout en bout
+  desc: >
+    Fonctions haut-niveau qui enchainent telechargement, extraction de
+    patches, inference et export.
+  contents:
+  - maestro_pipeline
+  - maestro_segmentation_pipeline
+  - flair_pipeline
+  - pipeline_flair_contrainte
+  - preparer_donnees_segmentation
+
+- title: Modalites et patches
+  desc: Specifications, grilles et extraction de patches multi-modaux.
+  contents:
+  - modalite_specs
+  - taille_patch_modalite
+  - creer_grille_patches
+  - extraire_patches_multimodal
+  - extraire_patches_raster
+  - creer_patches_inference
+
+- title: Telechargement IGN
+  desc: Orthophotos RGB/IRC, MNT/MNS via la Geoplateforme IGN (WMS-R).
+  contents:
+  - load_aoi
+  - download_ortho_for_aoi
+  - download_dem_for_aoi
+  - prepare_dem
+  - download_mnt_for_aoi
+  - download_ign_tiled
+  - download_wms_tile
+  - validate_wms_data
+  - ign_layer_name
+  - combine_rvb_irc
+  - aligner_dem_sur_rgbi
+  - assembler_dem_channels
+  - calculer_derives_terrain
+
+- title: Sentinel-1 / Sentinel-2 (STAC)
+  desc: Recherche STAC + composites multi-temporels.
+  contents:
+  - search_s2_stac
+  - search_s1_stac
+  - download_s2_for_aoi
+  - download_s1_for_aoi
+  - aligner_sentinel
+  - calculer_composite_median
+  - build_date_ranges
+  - s2_bands_config
+
+- title: Modeles MAESTRO (Hugging Face)
+  desc: Telechargement et inference du modele de classification par patch.
+  contents:
+  - telecharger_modele
+  - executer_inference
+  - executer_inference_multimodal
+  - find_checkpoint_name
+  - python_module_path
+  - configurer_python
+
+- title: Modeles FLAIR (segmentation pixel)
+  desc: Modeles UNet/UPerNet d'occupation du sol.
+  contents:
+  - charger_modele_flair
+  - telecharger_modele_flair
+  - executer_inference_flair
+  - flair_models
+  - flair_python_module_path
+  - assembler_resultats_flair
+  - contraindre_par_flair
+
+- title: Segmentation dense MAESTRO (NDP0)
+  desc: Decodeur de segmentation a 0,2 m, 10 classes NDP0.
+  contents:
+  - charger_segmenter
+  - executer_segmentation
+  - preparer_patches_entrainement
+  - preparer_labels_ndp0
+  - rasteriser_bdforet
+  - download_bdforet_for_aoi
+  - mapping_tfv_ndp0
+  - tfv_to_ndp0
+  - classes_ndp0
+  - labelliser_flair_bdforet
+
+- title: Dataset FLAIR-HUB (Hugging Face)
+  desc: Telechargement et inspection du dataset multimodal FLAIR-HUB.
+  contents:
+  - download_flair_subset
+  - download_flair_toy
+  - download_flair_segmentation
+  - lister_domaines_flair
+  - domaines_recommandes_segmentation
+  - load_flair_patch
+  - scan_flair_files
+  - preparer_flair_segmentation
+  - hf_list_files
+  - hf_download_file
+
+- title: Indices spectraux
+  contents:
+  - compute_ndvi
+  - compute_gndvi
+  - compute_savi
+  - mask_vegetation
+
+- title: Tables d'essences et de classes
+  contents:
+  - essences_pureforest
+  - classes_cosia
+  - classes_cosia_15
+  - classes_lpis
+  - classes_ndp0
+
+- title: Assemblage et exports
+  contents:
+  - assembler_resultats
+  - creer_carte_raster
+  - export_raster
+  - generer_rapport
+  - generer_rapport_segmentation
+
+- title: Evaluation
+  contents:
+  - evaluer_predictions
+  - compute_landcover_stats
+  - cross_landcover_dem
+
+development:
+  mode: auto

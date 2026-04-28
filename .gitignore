@@ -13,6 +13,10 @@
 outputs/
 resultats/
 
+# pkgdown
+docs/
+inst/doc/
+
 # Data (user-provided)
 data/aoi.gpkg
 

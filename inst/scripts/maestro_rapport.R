@@ -11,10 +11,10 @@
 #   lancer_inference <- TRUE; source("inst/scripts/maestro_rapport.R")
 #
 # En ligne de commande :
-#   Rscript inst/scripts/maestro_rapport.R
 #   Rscript inst/scripts/maestro_rapport.R --inference
 #   Rscript inst/scripts/maestro_rapport.R --inference --gpu
 #   Rscript inst/scripts/maestro_rapport.R --millesime 2023
+#   Rscript inst/scripts/maestro_rapport.R --checkpoint outputs/training/maestro_pureforest_best.pt
 # =============================================================================
 
 # --- Packages requis ---
@@ -29,13 +29,13 @@ library(sf)
 library(terra)
 library(fs)
 
-# --- Charger le package maestro ---
-if (requireNamespace("maestro", quietly = TRUE)) {
-  library(maestro)
+# --- Charger le package maestronemeton ---
+if (requireNamespace("maestronemeton"emeton", quietly = TRUE)) {
+  library(maestronemeton)
 } else if (requireNamespace("devtools", quietly = TRUE)) {
   devtools::load_all(".")
 } else {
-  stop("Le package 'maestro' n'est pas installe.")
+  stop("Le package 'maestronemeton' n'est pas installe.")
 }
 
 # =============================================================================
@@ -43,7 +43,7 @@ if (requireNamespace("maestro", quietly = TRUE)) {
 # =============================================================================
 
 # Palette de couleurs pour les 13 essences PureForest
-ESSENCES_COLORS <- c(
+ESSENCES_COLORS_PUREFOREST <- c(
   "#2ca02c",   # 0  Chene decidue  - vert fonce
   "#98df8a",   # 1  Chene vert     - vert clair
   "#ff7f0e",   # 2  Hetre          - orange
@@ -59,28 +59,32 @@ ESSENCES_COLORS <- c(
   "#bcbd22"    # 12 Peuplier       - jaune-vert
 )
 
-ESSENCES_LABELS <- c(
+ESSENCES_LABELS_PUREFOREST <- c(
   "Chene decidue", "Chene vert", "Hetre", "Chataignier",
   "Pin maritime", "Pin sylvestre", "Pin laricio/noir", "Pin d'Alep",
   "Epicea", "Sapin", "Douglas", "Meleze", "Peuplier"
 )
 
-# Palette de couleurs pour les 7 classes TreeSatAI regroupees
-ESSENCES_TSA_COLORS <- c(
-  "#2ca02c",   # 0  Chene          - vert fonce
+# Palette de couleurs pour les 8 classes TreeSatAI
+ESSENCES_COLORS_TREESATAI <- c(
+  "#2ca02c",   # 0  Chenes         - vert fonce
   "#ff7f0e",   # 1  Hetre          - orange
-  "#1f77b4",   # 2  Pin            - bleu
-  "#17becf",   # 3  Epicea         - cyan
-  "#8c564b",   # 4  Douglas/Sapin  - brun
-  "#e377c2",   # 5  Meleze         - rose
-  "#bcbd22"    # 6  Feuillus div.  - jaune-vert
+  "#d62728",   # 2  Autres feuillus - rouge
+  "#1f77b4",   # 3  Pins           - bleu
+  "#17becf",   # 4  Epicea/Sapin   - cyan
+  "#8c564b",   # 5  Douglas        - brun
+  "#e377c2",   # 6  Meleze         - rose
+  "#bdbdbd"    # 7  Cleared        - gris
 )
 
-ESSENCES_TSA_LABELS <- c(
-  "Chene", "Hetre", "Pin", "Epicea",
-  "Douglas/Sapin", "Meleze", "Feuillus divers"
+ESSENCES_LABELS_TREESATAI <- c(
+  "Chenes", "Hetre", "Autres feuillus", "Pins",
+  "Epicea/Sapin", "Douglas", "Meleze", "Cleared"
 )
 
+# Variables actives (selectionnees selon le mode)
+ESSENCES_COLORS <- ESSENCES_COLORS_PUREFOREST
+ESSENCES_LABELS <- ESSENCES_LABELS_PUREFOREST
 # =============================================================================
 # Fonctions de visualisation (pattern FLAIR-HUB : terra base R)
 # =============================================================================
@@ -139,8 +143,12 @@ plot_essences <- function(label_raster, title = "Essences forestieres") {
   colors <- ESSENCES_COLORS[present_classes + 1]
   labels <- ESSENCES_LABELS[present_classes + 1]
 
-  plot(label_raster, main = title, col = ESSENCES_COLORS,
-       type = "classes", levels = ESSENCES_LABELS,
+  # Reclasser le raster pour n'avoir que les classes presentes (0..n-1)
+  rcl <- cbind(present_classes, seq_along(present_classes))
+  r_reclass <- classify(label_raster, rcl)
+
+  plot(r_reclass, main = title, col = colors,
+       type = "classes", levels = labels,
        plg = list(legend = labels, cex = 0.7))
 }
 
@@ -216,6 +224,7 @@ millesime <- NULL
 utiliser_gpu <- FALSE
 aoi_path <- file.path("data", "aoi.gpkg")
 output_dir <- "outputs"
+if (!exists("checkpoint_path")) checkpoint_path <- NULL
 
 for (i in seq_along(args)) {
   if (args[i] == "--millesime" && i < length(args)) {
@@ -225,8 +234,18 @@ for (i in seq_along(args)) {
   if (args[i] == "--inference") lancer_inference <- TRUE
   if (args[i] == "--aoi" && i < length(args)) aoi_path <- args[i + 1]
   if (args[i] == "--output" && i < length(args)) output_dir <- args[i + 1]
+  if (args[i] == "--checkpoint" && i < length(args)) checkpoint_path <- args[i + 1]
 }
 if (!exists("lancer_inference")) lancer_inference <- FALSE
+
+# Activer le mode TreeSatAI si checkpoint fourni
+is_treesatai <- !is.null(checkpoint_path)
+if (is_treesatai) {
+  ESSENCES_COLORS <- ESSENCES_COLORS_TREESATAI
+  ESSENCES_LABELS <- ESSENCES_LABELS_TREESATAI
+  lancer_inference <- TRUE
+  message("  Mode TreeSatAI (8 classes) avec checkpoint: ", basename(checkpoint_path))
+}
 
 dossier_rapport <- file.path(output_dir, "rapport")
 dir.create(dossier_rapport, showWarnings = FALSE, recursive = TRUE)
@@ -266,30 +285,25 @@ ortho <- download_ortho_for_aoi(aoi, output_dir,
 message("\n=== Combinaison RVB + IRC -> RGBI ===")
 rgbi <- combine_rvb_irc(ortho$rvb, ortho$irc)
 
-# --- 1d. Telecharger MNT ---
-message("\n=== Telechargement MNT ===")
-mnt_data <- download_mnt_for_aoi(aoi, output_dir, rgbi = rgbi)
+# --- 1d. Telecharger DEM (DSM + DTM, 2 bandes) pour le rapport ---
+message("\n=== Telechargement DEM (DSM + DTM) ===")
+dem_data <- prepare_dem(aoi, output_dir, rgbi = rgbi, source = "wms")
 
-# --- 1e. Image finale 5 bandes ---
-message("\n=== Image finale ===")
-if (!is.null(mnt_data)) {
-  image_finale <- combine_rgbi_mnt(rgbi, mnt_data$mnt)
-  n_bands <- 5L
-} else {
-  message("  MNT non disponible, utilisation RGBI (4 bandes)")
-  image_finale <- rgbi
-  n_bands <- 4L
-}
+# --- 1e. Image RGBI (modalite aerial MAESTRO) ---
+# Le DEM n'est PAS empile a RGBI : MAESTRO traite les modalites separement.
+image_finale <- rgbi
+n_bands <- terra::nlyr(rgbi)
 
 finale_path <- file.path(output_dir, "image_finale.tif")
 writeRaster(image_finale, finale_path, overwrite = TRUE, gdal = c("COMPRESS=LZW"))
-message(sprintf("  Image finale : %s (%d bandes)", finale_path, n_bands))
+message(sprintf("  Aerial RGBI : %s (%d bandes)", finale_path, n_bands))
 
-# --- 1f. Grille de patches ---
+# --- 1f. Grille de patches alignee modalite aerial ---
 message("\n=== Grille de patches ===")
-patch_size <- 250L
-resolution <- 0.2
-taille_patch_m <- patch_size * resolution
+specs_mod <- modalite_specs()
+patch_size <- specs_mod$aerial$image_size
+resolution <- specs_mod$aerial$resolution
+taille_patch_m <- specs_mod$aerial$window_m
 grille <- creer_grille_patches(aoi, taille_patch_m)
 
 # --- 1g. Inference (opt-in avec --inference) ---
@@ -302,26 +316,67 @@ if (lancer_inference) {
     message("\n=== Configuration Python ===")
     configurer_python()
 
-    message("\n=== Telechargement du modele ===")
-    fichiers_modele <- telecharger_modele("IGNF/MAESTRO_FLAIR-HUB_base")
+    # Preparer les modalites pour l'inference multi-modale
+    modalites_inf <- list(aerial = rgbi)
+    modalites_noms <- c("aerial")
+    if (!is.null(dem_data)) {
+      dem <- aligner_dem_sur_rgbi(dem_data$dem, rgbi)
+      modalites_inf$dem <- dem
+      modalites_noms <- c(modalites_noms, "dem")
+    }
 
-    message("\n=== Extraction des patches ===")
-    patches_data <- extraire_patches_raster(image_finale, grille, patch_size)
+    # Si checkpoint fine-tune, filtrer les modalites selon celles entrainees
+    if (is_treesatai) {
+      torch <- reticulate::import("torch")
+      ckpt <- torch$load(checkpoint_path, map_location = "cpu")
+      ckpt_modalites <- if (!is.null(ckpt$modalites)) {
+        unlist(ckpt$modalites)
+      } else {
+        c("aerial")
+      }
+      message(sprintf("  Modalites du checkpoint: %s",
+                       paste(ckpt_modalites, collapse = " + ")))
+      modalites_noms <- intersect(modalites_noms, ckpt_modalites)
+      modalites_inf <- modalites_inf[modalites_noms]
+      message(sprintf("  Modalites retenues: %s",
+                       paste(modalites_noms, collapse = " + ")))
+    }
 
-    message("\n=== Inference MAESTRO ===")
-    predictions <- executer_inference(
-      patches_data, fichiers_modele,
-      n_classes = 13L, n_bands = n_bands,
-      utiliser_gpu = utiliser_gpu
-    )
+    message("\n=== Extraction des patches (multi-modal) ===")
+    patches_multimodal <- extraire_patches_multimodal(modalites_inf, grille, patch_size)
+
+    if (is_treesatai) {
+      message("\n=== Inference MAESTRO TreeSatAI (8 classes) ===")
+      predictions <- executer_inference_multimodal(
+        patches_multimodal, fichiers_modele = NULL,
+        modalites = modalites_noms,
+        utiliser_gpu = utiliser_gpu,
+        checkpoint = checkpoint_path
+      )
+      essences_table <- essences_treesatai()
+    } else {
+      message("\n=== Telechargement du modele ===")
+      fichiers_modele <- telecharger_modele("IGNF/MAESTRO_FLAIR-HUB_base")
+
+      message("\n=== Inference MAESTRO PureForest (13 classes) ===")
+      predictions <- executer_inference_multimodal(
+        patches_multimodal, fichiers_modele,
+        n_classes = 13L,
+        modalites = modalites_noms,
+        utiliser_gpu = utiliser_gpu
+      )
+      essences_table <- essences_pureforest()
+    }
 
     message("\n=== Assemblage des resultats ===")
-    resultats <- assembler_resultats(grille, predictions, dossier_sortie = output_dir)
+    resultats <- assembler_resultats(grille, predictions,
+                                      essences = essences_table,
+                                      dossier_sortie = output_dir)
     raster_carte <- creer_carte_raster(resultats, resolution, output_dir)
     inference_ok <- TRUE
 
   }, error = function(e) {
-    message("\nEnvironnement conda non disponible: ", e$message)
+    message("\nErreur lors de l'inference: ", e$message)
     message("Installation :")
     message("  conda create -n maestro python=3.10")
     message("  conda activate maestro")
@@ -461,7 +516,7 @@ if (inference_ok && !is.null(raster_carte)) {
   par(mfrow = c(1, 1), mar = c(2, 2, 4, 2), oma = c(0, 0, 2, 0))
 
   # Resume textuel du pipeline
-  ess <- essences_pureforest()
+  ess <- if (is_treesatai) essences_treesatai() else essences_pureforest()
   fichiers <- dir_ls(output_dir, type = "file", glob = "*.tif")
   info_lines <- sapply(fichiers, function(f) {
     sz <- file.info(f)$size
@@ -481,7 +536,8 @@ if (inference_ok && !is.null(raster_carte)) {
     sprintf("Image finale : %d bandes (%s)", nlyr(image_finale),
             paste(names(image_finale), collapse = ", ")),
     sprintf("Patches : %d", nrow(grille)),
-    sprintf("Especes : %d classes PureForest", nrow(ess)),
+    sprintf("Especes : %d classes %s", nrow(ess),
+            if (is_treesatai) "TreeSatAI" else "PureForest"),
     "",
     "--- Fichiers generes ---",
     info_lines,

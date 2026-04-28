@@ -1,7 +1,7 @@
 ---
 title: "Rapport Pipeline MAESTRO"
 subtitle: "Test du pipeline sur une AOI de démonstration"
-author: "Package maestro"
+author: "Package maestronemeton"
 date: "`r format(Sys.time(), '%d %B %Y - %H:%M')`"
 output:
   pdf_document:
@@ -54,9 +54,9 @@ knitr::opts_chunk$set(
 ```
 
 ```{r packages, message=FALSE}
-# Charger le package maestro
-if (requireNamespace("maestro", quietly = TRUE)) {
-  library(maestro)
+# Charger le package maestronemeton
+if (requireNamespace("maestronemeton"emeton", quietly = TRUE)) {
+  library(maestronemeton)
 } else {
   devtools::load_all(".")
 }

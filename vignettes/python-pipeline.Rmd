@@ -1,0 +1,193 @@
+---
+title: "Pipeline Python (MAESTRO / FLAIR)"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Pipeline Python (MAESTRO / FLAIR)}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+L'API R de `maestro` appelle, via `reticulate`, des modules Python livres
+sous `inst/python/`. Cette page documente ces modules pour les
+utilisateurs qui veulent **fine-tuner** un modele ou **etendre** la
+chaine d'inference.
+
+## Layout
+
+```
+inst/python/
+├── conf/
+│   └── pureforest.yaml         # Hydra config fine-tuning PureForest
+├── maestro_inference.py        # inference patch-niveau (R appelle ce module)
+├── maestro_finetune.py         # fine-tuning generique TreeSatAI legacy
+├── maestro_segmentation.py     # decodeur de segmentation NDP0
+├── flair_inference.py          # inference FLAIR (UNet/UPerNet)
+├── prepare_pureforest_aerial.py
+├── prepare_pureforest_dem.py
+├── pureforest_dataset.py       # Dataset PyTorch PureForest 13 classes
+├── pureforest_finetune.py      # Boucle de fine-tuning PureForest
+└── train_segmentation.py       # Entrainement decodeur segmentation
+```
+
+Cote scripts shell, `inst/scripts/cloud_train_*.sh` et
+`inst/scripts/deploy_scaleway.{sh,ps1}` pilotent l'execution sur GPU
+Scaleway.
+
+## Inference (`maestro_inference.py`)
+
+Charge un checkpoint MAESTRO (modele pre-entraine ou fine-tune) et execute
+la prediction sur des patches multi-modaux. Appele depuis R par
+`executer_inference_multimodal()`.
+
+```python
+from maestro_inference import inference_multimodal
+
+predictions, probabilities = inference_multimodal(
+    patches_aerial = aerial_array,   # (N, 4, 256, 256)
+    patches_dem    = dem_array,      # (N, 2, 256, 256), optionnel
+    patches_s2     = s2_array,       # (N, 10, 6, 6),    optionnel
+    patches_s1_asc = s1_asc_array,
+    patches_s1_des = s1_des_array,
+    weights_path   = "models/maestro_pureforest_best.pt",
+    n_classes      = 13,
+    use_gpu        = True,
+)
+```
+
+Modalites supportees (cf. fiche modele
+`IGNF/MAESTRO_FLAIR-HUB_base`) :
+
+| Modalite  | Resolution | Fenetre | Patch Hub | `patch_size.mae` |
+|-----------|-----------:|--------:|----------:|-----------------:|
+| `aerial`  | 0,2 m      | 51,2 m  | 256x256   | 16               |
+| `dem`     | 0,2 m      | 51,2 m  | 256x256   | 32               |
+| `s2`      | 10 m       | 60 m    | 6x6       | 2                |
+| `s1_asc`  | 10 m       | 60 m    | 6x6       | 2                |
+| `s1_des`  | 10 m       | 60 m    | 6x6       | 2                |
+
+Cote R, ces specifications sont retournees par `modalite_specs()` et
+utilisees automatiquement par `extraire_patches_multimodal()`.
+
+## Fine-tuning PureForest (`pureforest_finetune.py`)
+
+Pipeline de fine-tuning a deux etages :
+
+1. **Probe** — degele uniquement la tete de classification, train sur
+   `PROBE_EPOCHS` (defaut 10).
+2. **Finetune** — degele tout le backbone, train sur `FINETUNE_EPOCHS`
+   (defaut 50) avec early-stopping (`PATIENCE`).
+
+Lance localement :
+
+```bash
+python inst/python/pureforest_finetune.py \
+    --config inst/python/conf/pureforest.yaml \
+    --modalites aerial,dem \
+    --probe-epochs 10 \
+    --finetune-epochs 50 \
+    --batch-size 24
+```
+
+Sur Scaleway GPU (recommande pour les jeux de donnees a partir de
+quelques milliers de patches) :
+
+```bash
+inst/scripts/deploy_scaleway.sh \
+    --modalities aerial,dem \
+    --probe-epochs 10 \
+    --finetune-epochs 50 \
+    --instance-type GPU-3070-S \
+    --branch main
+```
+
+Le script provisionne l'instance, monte un volume persistant pour les
+donnees PureForest, lance `cloud_train_pureforest.sh` dans tmux, recupere
+le checkpoint final via `recover_model.sh`, puis detruit l'instance.
+
+## Preparation du dataset PureForest
+
+Telechargement et patchification depuis le dataset Hugging Face
+`IGNF/PureForest` :
+
+```bash
+# Modalite aerial : RGBI 4 bandes a 0,2 m
+python inst/python/prepare_pureforest_aerial.py \
+    --output-dir data/pureforest \
+    --domain D000_FRA  # ou subset specifique
+
+# Modalite dem : DSM + DTM 2 bandes
+python inst/python/prepare_pureforest_dem.py \
+    --output-dir data/pureforest
+```
+
+Les deux scripts sont idempotents (cache cote disque) et compatibles avec
+un volume Scaleway.
+
+## Inference FLAIR (`flair_inference.py`)
+
+Backend des modeles `IGNF/FLAIR-INC_*` (UNet, UPerNet, ResNet34/50).
+Appele par `executer_inference_flair()` cote R.
+
+```python
+from flair_inference import inference_segmentation
+
+raster = inference_segmentation(
+    rgbi_path      = "outputs/ortho_rgbi.tif",
+    dem_path       = "outputs/dem_2bands.tif",  # optionnel
+    weights_path   = "models/flair_inc_rgbi_15cl_resnet34-unet.pt",
+    encoder        = "resnet34",
+    decoder        = "unet",
+    n_classes      = 19,    # checkpoints 19 sorties pour 15 classes actives
+    patch_size     = 512,
+    overlap        = 128,
+    use_gpu        = True,
+)
+```
+
+Le blending des patches utilise une fenetre de Hann pour eliminer les
+artefacts de bordure ; les pixels hors AOI sont remplis de NA.
+
+## Decodeur de segmentation NDP0
+
+`maestro_segmentation.py` charge un backbone MAESTRO pre-entraine et
+greffe un decodeur de segmentation a 0,2 m (10 classes NDP0). Pour
+l'entrainer :
+
+```bash
+python inst/python/train_segmentation.py \
+    --backbone models/MAESTRO_pretrain.ckpt \
+    --train-dir data/segmentation/train \
+    --val-dir   data/segmentation/val \
+    --output    outputs/training/segmenter_ndp0_best.pt
+```
+
+Cote R, l'inference se fait via `maestro_segmentation_pipeline()` :
+
+```{r}
+maestro_segmentation_pipeline(
+  aoi_path      = "data/aoi.gpkg",
+  backbone_path = "models/MAESTRO_pretrain.ckpt",
+  decoder_path  = "models/segmenter_ndp0_best.pt",
+  use_flair     = TRUE  # contrainte feuillus/resineux post-hoc
+)
+```
+
+L'option `use_flair = TRUE` execute l'inference FLAIR puis corrige les
+pixels NDP0 incoherents avec la categorie feuillus/resineux predite par
+FLAIR (cf. `pipeline_flair_contrainte()`).
+
+## Code legacy
+
+Le pipeline TreeSatAI initial (avant la pivot PureForest) est archive
+sous `inst/legacy/`. Il reste fonctionnel mais n'est plus la voie
+recommandee :
+
+- `inst/legacy/finetune.R` (`finetune_maestro()`)
+- `inst/legacy/train_treesatai.py`
+- `inst/legacy/entrainer_treesatai.R`
+- `inst/legacy/finetune_cli.R`
+- `inst/legacy/predict_treesatai.R`

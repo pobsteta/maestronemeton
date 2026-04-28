@@ -9,7 +9,8 @@
 # Si pas d'IP fournie, lit le fichier .scaleway_instance genere par deploy_scaleway.sh.
 #
 # Actions :
-#   1. Telecharge maestro_treesatai_best.pt depuis l'instance
+#   1. Telecharge le checkpoint .pt et le rapport .report.json
+#      (cible : maestro_pureforest_best.pt ; fallback legacy : maestro_treesatai_best.pt)
 #   2. Telecharge les logs d'entrainement
 #   3. Propose de supprimer l'instance Scaleway
 # =============================================================================
@@ -62,7 +63,7 @@ log_info "Verification de l'etat de l'entrainement..."
 TRAINING_STATUS=$(ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" bash -c "'
     if tmux has-session -t maestro 2>/dev/null; then
         echo \"running\"
-    elif [ -f ~/maestro_nemeton/outputs/training/maestro_treesatai_best.pt ]; then
+    elif ls /data/outputs/training/*.pt ~/maestronemeton/outputs/training/*.pt 2>/dev/null | grep -q .; then
         echo \"done\"
     else
         echo \"unknown\"
@@ -101,30 +102,37 @@ mkdir -p "$LOCAL_DIR"
 echo ""
 log_info "=== Recuperation du modele ==="
 
-# Chercher le modele dans /data (volume) ou dans ~/maestro_nemeton (ancien chemin)
-REMOTE_DIR=$(ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" "if [ -d /data/outputs/training ]; then echo /data/outputs/training; else echo ~/maestro_nemeton/outputs/training; fi")
+# Chercher le modele dans /data (volume) ou dans ~/maestronemeton (ancien chemin)
+REMOTE_DIR=$(ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" "if [ -d /data/outputs/training ]; then echo /data/outputs/training; else echo ~/maestronemeton/outputs/training; fi")
 log_info "Repertoire distant : $REMOTE_DIR"
 
 # Lister les fichiers disponibles
 log_info "Fichiers disponibles sur l'instance :"
 ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" "ls -lh $REMOTE_DIR/*.pt 2>/dev/null || echo '  (aucun fichier .pt)'"
 
-# Telecharger le meilleur modele
-if ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" "test -f $REMOTE_DIR/maestro_treesatai_best.pt"; then
-    log_info "Telechargement de maestro_treesatai_best.pt..."
-    scp -o StrictHostKeyChecking=no "root@$PUBLIC_IP:$REMOTE_DIR/maestro_treesatai_best.pt" "$LOCAL_DIR/"
-    log_ok "Modele recupere : $LOCAL_DIR/maestro_treesatai_best.pt"
-    ls -lh "$LOCAL_DIR/maestro_treesatai_best.pt"
+# Tirer tout ce qui est .pt et .report.json dans REMOTE_DIR — couvre le cas
+# PureForest (maestro_pureforest_best.pt) et l'ancien legacy TreeSatAI sans
+# avoir a hardcoder le nom.
+log_info "Telechargement des checkpoints + rapports..."
+RECOVERED=0
+for ext in pt report.json; do
+    if ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" \
+        "ls $REMOTE_DIR/*.$ext 2>/dev/null | head -1 | grep -q ."; then
+        scp -o StrictHostKeyChecking=no \
+            "root@$PUBLIC_IP:$REMOTE_DIR/*.$ext" "$LOCAL_DIR/" 2>/dev/null && \
+            RECOVERED=$((RECOVERED + 1))
+    fi
+done
+if [ "$RECOVERED" -eq 0 ]; then
+    log_warn "Aucun .pt ni .report.json trouve dans $REMOTE_DIR"
 else
-    log_warn "maestro_treesatai_best.pt introuvable"
+    log_ok "Fichiers recuperes :"
+    ls -lh "$LOCAL_DIR"/*.pt "$LOCAL_DIR"/*.report.json 2>/dev/null
 fi
 
-# Telecharger le modele final aussi
-if ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" "test -f $REMOTE_DIR/maestro_treesatai_final.pt"; then
-    log_info "Telechargement de maestro_treesatai_final.pt..."
-    scp -o StrictHostKeyChecking=no "root@$PUBLIC_IP:$REMOTE_DIR/maestro_treesatai_final.pt" "$LOCAL_DIR/"
-    log_ok "Modele final recupere : $LOCAL_DIR/maestro_treesatai_final.pt"
-fi
+# Determiner le nom du best checkpoint pour les instructions finales
+BEST_PT=$(ls -1 "$LOCAL_DIR"/*best*.pt 2>/dev/null | head -1)
+BEST_PT="${BEST_PT:-$LOCAL_DIR/maestro_pureforest_best.pt}"
 
 # Telecharger les logs
 if ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" "test -f ~/train.log"; then
@@ -139,12 +147,12 @@ echo "========================================================"
 echo -e " ${GREEN}Recuperation terminee !${NC}"
 echo "========================================================"
 echo ""
-echo "  Modele : $LOCAL_DIR/maestro_treesatai_best.pt"
+echo "  Modele : $BEST_PT"
 echo ""
 echo "  Pour predire sur votre AOI :"
 echo "    Rscript inst/scripts/predict_from_checkpoint.R \\"
 echo "        --aoi data/aoi.gpkg \\"
-echo "        --checkpoint $LOCAL_DIR/maestro_treesatai_best.pt"
+echo "        --checkpoint $BEST_PT"
 echo ""
 
 if [ -n "${SERVER_ID:-}" ] && [ -n "${ZONE:-}" ]; then

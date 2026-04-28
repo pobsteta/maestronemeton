@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 # =============================================================================
 # maestro_cli.R
-# Interface en ligne de commande pour le package maestro
+# Interface en ligne de commande pour le package maestronemeton
 #
 # Utilisation :
 #   Rscript maestro_cli.R --aoi data/aoi.gpkg
@@ -12,13 +12,13 @@
 if (!requireNamespace("optparse", quietly = TRUE)) {
   install.packages("optparse", repos = "https://cloud.r-project.org")
 }
-if (!requireNamespace("maestro", quietly = TRUE)) {
-  stop("Le package 'maestro' n'est pas installe.\n",
+if (!requireNamespace("maestronemeton"emeton", quietly = TRUE)) {
+  stop("Le package 'maestronemeton' n'est pas installe.\n",
        "Installez-le avec : devtools::install() ou R CMD INSTALL .")
 }
 
 library(optparse)
-library(maestro)
+library(maestronemeton)
 
 option_list <- list(
   make_option(c("-a", "--aoi"), type = "character", default = "data/aoi.gpkg",
@@ -32,8 +32,8 @@ option_list <- list(
               help = "Millesime de l'ortho RVB (NULL = plus recent)"),
   make_option(c("--millesime_irc"), type = "integer", default = NULL,
               help = "Millesime de l'ortho IRC (NULL = plus recent)"),
-  make_option(c("-s", "--patch_size"), type = "integer", default = 250L,
-              help = "Taille des patches en pixels [default: %default]"),
+  make_option(c("-s", "--patch_size"), type = "integer", default = 256L,
+              help = "Taille des patches en pixels (multiple de 16) [default: %default]"),
   make_option(c("--resolution"), type = "double", default = 0.2,
               help = "Resolution spatiale en metres [default: %default]"),
   make_option(c("--s2"), action = "store_true", default = FALSE,

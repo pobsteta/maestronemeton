@@ -259,15 +259,29 @@ executer_segmentation <- function(segmenter, modalites, aoi,
     vals_prob[mask_better] <- terra::values(new_prob)[mask_better]
 
     # Reecrire dans les rasters complets via indexation row/col
+    # Utiliser les dimensions reelles du crop pour eviter les decalages
     row_start <- terra::rowFromY(raster_classes, terra::ymax(ext_inter))
-    row_end   <- terra::rowFromY(raster_classes, terra::ymin(ext_inter))
     col_start <- terra::colFromX(raster_classes, terra::xmin(ext_inter))
-    col_end   <- terra::colFromX(raster_classes, terra::xmax(ext_inter))
+    nr <- terra::nrow(cur_cls)
+    nc <- terra::ncol(cur_cls)
+    rows <- seq(row_start, length.out = nr)
+    cols <- seq(col_start, length.out = nc)
 
-    rows <- row_start:row_end
-    cols <- col_start:col_end
+    # Filtrer les indices hors limites du raster (patches en bordure)
+    valid_rows <- rows >= 1 & rows <= terra::nrow(raster_classes)
+    valid_cols <- cols >= 1 & cols <= terra::ncol(raster_classes)
+    rows <- rows[valid_rows]
+    cols <- cols[valid_cols]
+
+    if (length(rows) == 0 || length(cols) == 0) next
+
+    # Recouper les valeurs si le crop a ete tronque
+    vals_mat_cls <- matrix(vals_cls, nrow = nr, ncol = nc)
+    vals_mat_prob <- matrix(vals_prob, nrow = nr, ncol = nc)
+    vals_cls <- as.vector(vals_mat_cls[valid_rows, valid_cols])
+    vals_prob <- as.vector(vals_mat_prob[valid_rows, valid_cols])
+
     cells <- terra::cellFromRowColCombine(raster_classes, rows, cols)
-
     raster_classes[cells] <- vals_cls
     raster_proba[cells] <- vals_prob
 
@@ -278,6 +292,9 @@ executer_segmentation <- function(segmenter, modalites, aoi,
   }
 
   names(raster_classes) <- "classe_ndp0"
+
+  # Remplacer les NA par 9 (Non-foret) pour compatibilite INT1U
+  raster_classes[is.na(raster_classes)] <- 9L
 
   # Sauvegarder
   out_path <- file.path(output_dir, "segmentation_ndp0.tif")

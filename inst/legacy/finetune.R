@@ -730,7 +730,7 @@ finetune_maestro <- function(checkpoint_path, data_dir,
   # Configurer Python
   configurer_python()
 
-  py_path <- system.file("python", package = "maestro", mustWork = TRUE)
+  py_path <- system.file("python", package = "maestronemeton", mustWork = TRUE)
   finetune_module <- reticulate::import_from_path("maestro_finetune",
                                                     path = py_path)
 

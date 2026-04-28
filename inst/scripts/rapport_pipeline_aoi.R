@@ -23,13 +23,13 @@ library(terra)
 library(sf)
 library(fs)
 
-# --- Charger le package maestro ---
-if (requireNamespace("maestro", quietly = TRUE)) {
-  library(maestro)
+# --- Charger le package maestronemeton ---
+if (requireNamespace("maestronemeton"emeton", quietly = TRUE)) {
+  library(maestronemeton)
 } else if (requireNamespace("devtools", quietly = TRUE)) {
   devtools::load_all(".")
 } else {
-  stop("Le package 'maestro' n'est pas installe.")
+  stop("Le package 'maestronemeton' n'est pas installe.")
 }
 
 # =============================================================================

@@ -1,7 +1,8 @@
 #' Classes d'essences forestieres PureForest
 #'
-#' Table des 13 classes d'essences forestieres du jeu de donnees PureForest,
-#' utilise pour l'entrainement du modele MAESTRO. Source : BD Foret V2 / IGN.
+#' Table des 13 classes d'essences forestieres du jeu de donnees PureForest
+#' (IGN), utilise pour l'entrainement du modele MAESTRO. Source officielle :
+#' fiche dataset Hugging Face `IGNF/PureForest`.
 #'
 #' @return Un data.frame avec les colonnes code, classe, nom_latin et type
 #' @export
@@ -12,54 +13,54 @@ essences_pureforest <- function() {
   data.frame(
     code = 0:12,
     classe = c(
-      "Chene decidue",
+      "Chene decidu",
       "Chene vert",
       "Hetre",
       "Chataignier",
+      "Robinier",
       "Pin maritime",
       "Pin sylvestre",
-      "Pin laricio/noir",
+      "Pin noir",
       "Pin d'Alep",
-      "Epicea",
       "Sapin",
-      "Douglas",
+      "Epicea",
       "Meleze",
-      "Peuplier"
+      "Douglas"
     ),
     nom_latin = c(
-      "Quercus spp. (deciduous)",
+      "Quercus robur, Q. petraea, Q. pubescens",
       "Quercus ilex",
       "Fagus sylvatica",
       "Castanea sativa",
+      "Robinia pseudoacacia",
       "Pinus pinaster",
       "Pinus sylvestris",
       "Pinus nigra",
       "Pinus halepensis",
-      "Picea abies",
       "Abies alba",
-      "Pseudotsuga menziesii",
-      "Larix spp.",
-      "Populus spp."
+      "Picea abies",
+      "Larix decidua, L. kaempferi",
+      "Pseudotsuga menziesii"
     ),
     type = c(
-      "feuillu", "feuillu", "feuillu", "feuillu",
+      "feuillu", "feuillu", "feuillu", "feuillu", "feuillu",
       "resineux", "resineux", "resineux", "resineux",
-      "resineux", "resineux", "resineux", "resineux",
-      "feuillu"
+      "resineux", "resineux", "resineux", "resineux"
     ),
     stringsAsFactors = FALSE
   )
 }
 
 
-#' Les 20 genres d'arbres du dataset TreeSatAI
+#' Les 20 genres d'arbres du dataset TreeSatAI (legacy)
 #'
 #' Retourne le vecteur des 20 genres d'arbres europeens presents dans
-#' le TreeSatAI Benchmark Archive. Utilise en interne pour le telechargement
-#' et l'organisation des donnees.
+#' le TreeSatAI Benchmark Archive. Conservee pour la compatibilite avec
+#' les scripts legacy (cf. inst/legacy/).
 #'
 #' @return Vecteur character de 20 noms de genres
-#' @export
+#' @keywords internal
+#' @noRd
 treesatai_species <- function() {
   c("Abies", "Acer", "Alnus", "Betula", "Carpinus",
     "Castanea", "Fagus", "Fraxinus", "Larix", "Picea",
@@ -68,28 +69,16 @@ treesatai_species <- function() {
 }
 
 
-#' Classes d'essences forestieres TreeSatAI (7 classes)
+#' Classes d'essences forestieres TreeSatAI (legacy, 7 classes)
 #'
-#' Table des 7 classes regroupees pour le fine-tuning sur TreeSatAI.
-#' Ce schema simplifie les 20 especes TreeSatAI en 7 classes forestieres.
-#' Quand le LiDAR sera integre, on passera aux 13 classes PureForest
-#' completes. La detection coupe/vide est geree en amont via FLAIR.
+#' Table des 7 classes regroupees, conservee uniquement pour la
+#' compatibilite avec les checkpoints fine-tunes sur TreeSatAI produits
+#' avant la migration vers PureForest 13 classes (cf. DEV_PLAN.md, phase 0).
+#' Non exportee, ne pas utiliser pour de nouveaux entrainements.
 #'
-#' Regroupement :
-#' - Chene : Quercus robur, Q. petraea, Q. rubra
-#' - Hetre : Fagus sylvatica
-#' - Pin : Pinus sylvestris, P. nigra, P. strobus
-#' - Epicea : Picea abies
-#' - Douglas/Sapin : Pseudotsuga menziesii, Abies alba (resineux sempervirents sombres)
-#' - Meleze : Larix decidua, L. kaempferi (caduc, phenologie distincte)
-#' - Feuillus divers : Betula, Populus, Alnus, Fraxinus, Acer, Castanea,
-#'   Robinia, Salix, Prunus, Sorbus, Tilia, Carpinus, Taxus
-#'
-#' @return Un data.frame avec les colonnes code, classe, nom_latin et type
-#' @export
-#' @examples
-#' ess <- essences_treesatai()
-#' ess[ess$type == "resineux", ]
+#' @return data.frame (code, classe, nom_latin, type)
+#' @keywords internal
+#' @noRd
 essences_treesatai <- function() {
   data.frame(
     code = 0:6,

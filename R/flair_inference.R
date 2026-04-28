@@ -7,7 +7,7 @@
 #' @return Chemin du repertoire Python (character)
 #' @export
 flair_python_module_path <- function() {
-  system.file("python", package = "maestro", mustWork = TRUE)
+  system.file("python", package = "maestronemeton", mustWork = TRUE)
 }
 
 #' Charger un modele FLAIR pour la segmentation
@@ -43,11 +43,11 @@ charger_modele_flair <- function(chemin_poids, n_classes = 19L,
 #' Telecharger un modele FLAIR pre-entraine depuis HuggingFace
 #'
 #' @param model_id Identifiant HuggingFace du modele
-#'   (defaut: "IGNF/FLAIR-INC_RGBI_15cl")
+#'   (defaut: "IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet")
 #' @param token Token HuggingFace (optionnel)
 #' @return Liste avec `weights` (chemin des poids) et `config` (configuration)
 #' @export
-telecharger_modele_flair <- function(model_id = "IGNF/FLAIR-INC_RGBI_15cl",
+telecharger_modele_flair <- function(model_id = "IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet",
                                       token = NULL) {
   message(sprintf("=== Telechargement modele FLAIR: %s ===", model_id))
 

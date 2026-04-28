@@ -1,4 +1,4 @@
-# maestro - Reconnaissance des essences forestieres
+# maestronemeton - Reconnaissance des essences forestieres
 
 Package R pour la reconnaissance automatique des essences forestieres a
 partir d'une zone d'interet (`aoi.gpkg`) en utilisant le modele
@@ -14,7 +14,7 @@ le service WMS-R (pas de cle API necessaire).
 
 ```r
 # Depuis le depot Git
-devtools::install_github("pobsteta/maestro_nemeton")
+devtools::install_github("pobsteta/maestronemeton")
 
 # Ou localement
 devtools::install(".")
@@ -33,19 +33,18 @@ pip install torch numpy safetensors
 ### En tant que package R
 
 ```r
-library(maestro)
+library(maestronemeton)
 
 # Pipeline complet en une ligne
 maestro_pipeline("data/aoi.gpkg",
                   millesime_ortho = 2023,
                   millesime_irc = 2023)
 
-# Ou etape par etape
+# Ou etape par etape (modalites separees)
 aoi   <- load_aoi("data/aoi.gpkg")
 ortho <- download_ortho_for_aoi(aoi, "outputs/", millesime_ortho = 2023)
-rgbi  <- combine_rvb_irc(ortho$rvb, ortho$irc)
-mnt   <- download_mnt_for_aoi(aoi, "outputs/", rgbi = rgbi)
-image <- combine_rgbi_mnt(rgbi, mnt$mnt)
+rgbi  <- combine_rvb_irc(ortho$rvb, ortho$irc)        # modalite aerial (4ch)
+dem   <- prepare_dem(aoi, "outputs/", rgbi = rgbi)    # modalite dem (DSM, DTM)
 # ... inference, export
 ```
 
@@ -139,15 +138,15 @@ outputs/
 ## Structure du package
 
 ```
-maestro_nemeton/
+maestronemeton/
   DESCRIPTION
   NAMESPACE
   LICENSE
   data/                   # Placer aoi.gpkg ici
   R/
     aoi.R            # load_aoi()
-    combine.R        # combine_rvb_irc(), combine_rgbi_mnt()
-    download_ign.R   # download_ortho_for_aoi(), download_mnt_for_aoi(), ...
+    combine.R        # combine_rvb_irc(), aligner_dem_sur_rgbi()
+    download_ign.R   # download_ortho_for_aoi(), prepare_dem(), ...
     essences.R       # essences_pureforest()
     export.R         # assembler_resultats(), creer_carte_raster()
     inference.R      # configurer_python(), executer_inference()
@@ -171,9 +170,9 @@ maestro_nemeton/
 | `maestro_pipeline()` | Pipeline complet AOI -> carte des essences |
 | `load_aoi()` | Charger un GeoPackage et reprojeter en Lambert-93 |
 | `download_ortho_for_aoi()` | Telecharger ortho RVB + IRC depuis IGN |
-| `download_mnt_for_aoi()` | Telecharger MNT RGE ALTI 1m depuis IGN |
-| `combine_rvb_irc()` | Combiner RVB + IRC en image 4 bandes RGBI |
-| `combine_rgbi_mnt()` | Ajouter le MNT comme 5eme bande |
+| `prepare_dem()` | Preparer la modalite dem MAESTRO (DSM LiDAR HD + DTM RGE ALTI) |
+| `combine_rvb_irc()` | Combiner RVB + IRC en image 4 bandes RGBI (modalite aerial) |
+| `aligner_dem_sur_rgbi()` | Reechantillonner le DEM 2 bandes sur la grille aerial |
 | `telecharger_modele()` | Telecharger le modele depuis Hugging Face |
 | `configurer_python()` | Configurer l'environnement Python |
 | `creer_grille_patches()` | Creer la grille de patches pour l'inference |
@@ -212,21 +211,23 @@ maestro_nemeton/
 
 ## Essences detectees (13 classes PureForest)
 
+Source : fiche dataset Hugging Face `IGNF/PureForest`.
+
 | Code | Essence | Nom latin | Type |
 |------|---------|-----------|------|
-| 0 | Chene decidue | *Quercus spp.* | Feuillu |
+| 0 | Chene decidu | *Quercus robur, Q. petraea, Q. pubescens* | Feuillu |
 | 1 | Chene vert | *Quercus ilex* | Feuillu |
 | 2 | Hetre | *Fagus sylvatica* | Feuillu |
 | 3 | Chataignier | *Castanea sativa* | Feuillu |
-| 4 | Pin maritime | *Pinus pinaster* | Resineux |
-| 5 | Pin sylvestre | *Pinus sylvestris* | Resineux |
-| 6 | Pin laricio/noir | *Pinus nigra* | Resineux |
-| 7 | Pin d'Alep | *Pinus halepensis* | Resineux |
-| 8 | Epicea | *Picea abies* | Resineux |
+| 4 | Robinier | *Robinia pseudoacacia* | Feuillu |
+| 5 | Pin maritime | *Pinus pinaster* | Resineux |
+| 6 | Pin sylvestre | *Pinus sylvestris* | Resineux |
+| 7 | Pin noir | *Pinus nigra* | Resineux |
+| 8 | Pin d'Alep | *Pinus halepensis* | Resineux |
 | 9 | Sapin | *Abies alba* | Resineux |
-| 10 | Douglas | *Pseudotsuga menziesii* | Resineux |
-| 11 | Meleze | *Larix spp.* | Resineux |
-| 12 | Peuplier | *Populus spp.* | Feuillu |
+| 10 | Epicea | *Picea abies* | Resineux |
+| 11 | Meleze | *Larix decidua, L. kaempferi* | Resineux |
+| 12 | Douglas | *Pseudotsuga menziesii* | Resineux |
 
 ## Donnees IGN
 
@@ -249,24 +250,30 @@ Code de telechargement adapte de
 
 ## Entrainement GPU sur Scaleway
 
-Le package inclut des scripts pour entrainer un modele fine-tune (TreeSatAI,
-8 classes) sur une instance GPU Scaleway.
+Le package inclut des scripts pour fine-tuner MAESTRO sur une instance GPU
+Scaleway (cible : PureForest 13 classes, cf. `DEV_PLAN.md`). Les scripts
+historiques TreeSatAI (8 classes regroupees) sont archives sous
+`inst/legacy/`.
 
 ### Deploiement depuis Windows (PowerShell)
 
 ```powershell
-# Pre-requis : CLI Scaleway (scw init) + OpenSSH
+# Pre-requis : CLI Scaleway (scw init) + OpenSSH + Git
 
 # Test a blanc (voir les commandes sans executer)
 .\inst\scripts\deploy_scaleway.ps1 -DryRun
 
-# Lancer avec un GPU RTX 3070 (defaut, ~2 EUR pour 30 epochs)
+# Aerial seul, defauts (L4-1-24G, batch 24, probe 10 + finetune 50)
 .\inst\scripts\deploy_scaleway.ps1
 
-# Avec un GPU L4 pour le multi-modal
-.\inst\scripts\deploy_scaleway.ps1 -InstanceType L4-1-24G -Epochs 50
+# Aerial + DEM (active prepare_pureforest_dem.py + LAZ download)
+.\inst\scripts\deploy_scaleway.ps1 -Modalities "aerial,dem"
 
-# Recuperer le modele entraine
+# Avec notification email/webhook
+.\inst\scripts\deploy_scaleway.ps1 -Modalities "aerial,dem" `
+    -NotifyEmail mon@email.fr -NotifyWebhook https://ntfy.sh/maestro-train
+
+# Recuperer le modele entraine + le rapport
 .\inst\scripts\recover_model.ps1
 
 # Ou avec l'IP directement
@@ -279,8 +286,11 @@ Le package inclut des scripts pour entrainer un modele fine-tune (TreeSatAI,
 # Test a blanc
 bash inst/scripts/deploy_scaleway.sh --dry-run
 
-# Lancer l'entrainement
+# Aerial seul (defauts)
 bash inst/scripts/deploy_scaleway.sh
+
+# Aerial + DEM
+bash inst/scripts/deploy_scaleway.sh --modalities aerial,dem
 
 # Recuperer le modele
 bash inst/scripts/recover_model.sh
@@ -288,10 +298,13 @@ bash inst/scripts/recover_model.sh
 
 ### Prediction apres entrainement
 
+Le checkpoint produit par `cloud_train_pureforest.sh` est sauvegarde
+sous `outputs/training/maestro_pureforest_best.pt` (13 classes).
+
 ```bash
 Rscript inst/scripts/predict_from_checkpoint.R \
     --aoi data/aoi.gpkg \
-    --checkpoint outputs/training/maestro_treesatai_best.pt
+    --checkpoint outputs/training/maestro_pureforest_best.pt
 ```
 
 ## References

@@ -49,8 +49,8 @@ option_list <- list(
               help = "Annees pour composite multitemporel (ex: 2022:2024)"),
   make_option("--saison", type = "character", default = "ete",
               help = "Saison pour composite : ete, printemps, automne, annee [defaut: ete]"),
-  make_option("--patch-size", type = "integer", default = 250L,
-              help = "Taille des patches en pixels [defaut: 250]"),
+  make_option("--patch-size", type = "integer", default = 256L,
+              help = "Taille des patches en pixels (multiple de 16) [defaut: 256]"),
   make_option("--resolution", type = "double", default = 0.2,
               help = "Resolution spatiale en metres [defaut: 0.2]"),
   make_option("--batch-size", type = "integer", default = 16L,
@@ -88,13 +88,13 @@ if (!file.exists(args$checkpoint)) {
   stop(sprintf("Checkpoint introuvable : %s", args$checkpoint))
 }
 
-# --- Charger le package maestro ---
+# --- Charger le package maestronemeton ---
 # Si execute depuis le repo, charger via devtools
 if (file.exists("DESCRIPTION")) {
-  message("Chargement du package maestro depuis le depot local...")
+  message("Chargement du package maestronemeton depuis le depot local...")
   suppressPackageStartupMessages(devtools::load_all(quiet = TRUE))
 } else {
-  suppressPackageStartupMessages(library(maestro))
+  suppressPackageStartupMessages(library(maestronemeton))
 }
 
 # --- Parser les annees si fournies ---
