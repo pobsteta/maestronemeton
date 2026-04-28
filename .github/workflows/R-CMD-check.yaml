@@ -39,11 +39,19 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          # Suggests heterogenes (lasR via r-universe, hfhub, optparse) sont
-          # exclus en mode dependencies='hard' pour eviter les echecs sur
-          # le runner Ubuntu.
+          # dependencies='hard' exclut les Suggests heterogenes (lasR via
+          # r-universe, hfhub, optparse) qui plombent l'install. On
+          # reinjecte explicitement les Suggests reellement necessaires
+          # pour R CMD check : testthat (tests/), withr (tests), tinytex
+          # (utilise via requireNamespace dans R/rapport.R), rmarkdown +
+          # knitr (vignettes).
           extra-packages: |
             any::rcmdcheck
+            any::testthat
+            any::withr
+            any::tinytex
+            any::rmarkdown
+            any::knitr
             local::.
           dependencies: '"hard"'
 

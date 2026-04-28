@@ -41,6 +41,8 @@ Suggests:
     optparse,
     rmarkdown,
     knitr,
+    tinytex,
+    withr,
     testthat (>= 3.0.0)
 Additional_repositories:
     https://r-lidar.r-universe.dev
