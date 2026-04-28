@@ -47,6 +47,7 @@ export(calculer_composite_median)
 
 # --- FLAIR (occupation du sol) ---
 export(classes_cosia)
+export(classes_cosia_15)
 export(classes_lpis)
 export(flair_models)
 export(flair_pipeline)
@@ -88,6 +89,14 @@ export(compute_ndvi)
 export(compute_gndvi)
 export(compute_savi)
 export(mask_vegetation)
+
+# --- Rapport ---
+export(generer_rapport)
+export(generer_rapport_segmentation)
+
+# --- Contrainte FLAIR ---
+export(contraindre_par_flair)
+export(pipeline_flair_contrainte)
 
 # --- Analyse et evaluation ---
 export(compute_landcover_stats)

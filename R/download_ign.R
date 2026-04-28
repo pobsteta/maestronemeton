@@ -389,8 +389,15 @@ download_dem_for_aoi <- function(aoi, output_dir, dem_channels = c("SLOPE", "TWI
   fs::dir_create(output_dir)
 
   dem_channels <- toupper(dem_channels)
-  if (length(dem_channels) != 2) {
-    stop("dem_channels doit contenir exactement 2 noms, ex: c('SLOPE', 'TWI')")
+  valid_channels <- c("DSM", "DTM", "SLOPE", "ASPECT", "TPI", "TWI")
+  unknown <- setdiff(dem_channels, valid_channels)
+  if (length(unknown) > 0) {
+    stop(sprintf("Canal(aux) DEM inconnu(s): %s. Valides: %s",
+                 paste(unknown, collapse = ", "),
+                 paste(valid_channels, collapse = ", ")))
+  }
+  if (length(dem_channels) < 1 || length(dem_channels) > 6) {
+    stop("dem_channels doit contenir entre 1 et 6 noms de canaux")
   }
 
   # Suffixe de cache base sur les canaux choisis
@@ -466,7 +473,7 @@ download_dem_for_aoi <- function(aoi, output_dir, dem_channels = c("SLOPE", "TWI
   } else {
     dsm <- dtm
     names(dsm) <- "DSM"
-    message("  DSM non requis (canaux: %s)", paste(dem_channels, collapse = ", "))
+    message(sprintf("  DSM non requis (canaux: %s)", paste(dem_channels, collapse = ", ")))
   }
 
   # --- Calcul des derives morphologiques a 1m ---

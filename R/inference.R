@@ -24,46 +24,53 @@ configurer_python <- function(envname = CONDA_ENV) {
   # Eviter le conflit OpenMP sur Windows (torch + numpy livrent chacun libiomp5md.dll)
   Sys.setenv(KMP_DUPLICATE_LIB_OK = "TRUE")
 
-  # Auto-detection de conda (Miniforge, Miniconda, Anaconda)
-  # On cherche le binaire conda ET le Python de l'environnement AVANT
+  # Si Python est deja initialise par reticulate, verifier si c'est le bon
+  if (reticulate::py_available(initialize = FALSE)) {
+    py_actif <- reticulate::py_config()$python
+    attendu <- .find_maestro_python(envname)
 
-  # de charger reticulate pour eviter qu'il s'accroche au mauvais Python.
-  conda_dirs <- if (.Platform$OS.type == "windows") {
-    home <- Sys.getenv("USERPROFILE", Sys.getenv("HOME"))
-    c(file.path(home, "miniforge3"),
-      file.path(home, "mambaforge"),
-      file.path(home, "miniconda3"),
-      file.path(home, "anaconda3"),
-      file.path(Sys.getenv("LOCALAPPDATA"), "miniforge3"),
-      file.path(Sys.getenv("PROGRAMDATA"), "miniforge3"))
-  } else {
-    home <- Sys.getenv("HOME")
-    c(file.path(home, "miniforge3"),
-      file.path(home, "mambaforge"),
-      file.path(home, "miniconda3"),
-      file.path(home, "anaconda3"),
-      "/opt/miniforge3",
-      "/opt/miniconda3")
-  }
+    # Normaliser les chemins pour comparaison (Windows: / vs \)
+    py_norm <- normalizePath(py_actif, winslash = "/", mustWork = FALSE)
+    att_norm <- if (!is.null(attendu)) {
+      normalizePath(attendu, winslash = "/", mustWork = FALSE)
+    } else {
+      ""
+    }
 
-  # Chercher le Python de l'environnement conda directement
-  if (nchar(Sys.getenv("RETICULATE_PYTHON")) == 0) {
-    for (conda_root in conda_dirs) {
-      py_path <- if (.Platform$OS.type == "windows") {
-        file.path(conda_root, "envs", envname, "python.exe")
+    if (grepl(envname, py_norm, fixed = TRUE)) {
+      # Le bon env est actif, tout va bien
+      message("Python deja initialise avec l'env '", envname, "': ", py_actif)
+    } else {
+      # Mauvais Python actif - verifier si torch est quand meme disponible
+      if (reticulate::py_module_available("torch")) {
+        message("Note : Python actif (", py_actif,
+                ") n'est pas l'env conda '", envname,
+                "' mais torch est disponible.")
       } else {
-        file.path(conda_root, "envs", envname, "bin", "python")
-      }
-      if (file.exists(py_path)) {
-        Sys.setenv(RETICULATE_PYTHON = py_path)
-        message("Python de l'env '", envname, "' detecte: ", py_path)
-        break
+        stop("Python deja initialise avec le mauvais environnement :\n",
+             "  Actif  : ", py_actif, "\n",
+             "  Attendu: ", att_norm, "\n\n",
+             "Solution : avant de charger le package, executez :\n",
+             "  Sys.setenv(RETICULATE_PYTHON = \"", att_norm, "\")\n",
+             "Puis redemarrez la session R.", call. = FALSE)
       }
     }
+
+    return(.verifier_modules_python())
+  }
+
+  # Python pas encore initialise : configurer l'env conda
+
+  # Chercher le Python de l'environnement conda directement
+  attendu <- .find_maestro_python(envname)
+  if (!is.null(attendu) && nchar(Sys.getenv("RETICULATE_PYTHON")) == 0) {
+    Sys.setenv(RETICULATE_PYTHON = attendu)
+    message("Python de l'env '", envname, "' detecte: ", attendu)
   }
 
   # Chercher le binaire conda pour reticulate
   if (nchar(Sys.getenv("RETICULATE_CONDA")) == 0) {
+    conda_dirs <- .conda_search_dirs()
     conda_suffix <- if (.Platform$OS.type == "windows") {
       file.path("condabin", "conda.bat")
     } else {
@@ -80,8 +87,15 @@ configurer_python <- function(envname = CONDA_ENV) {
   reticulate::use_condaenv(envname, required = TRUE)
   message("Environnement conda configure: ", envname)
 
-  # Verifier les modules disponibles
-  modules <- c("torch", "numpy", "safetensors", "tifffile", "PIL")
+  .verifier_modules_python()
+}
+
+# Verifier que les modules Python requis sont disponibles
+# @return invisible(NULL)
+# @keywords internal
+.verifier_modules_python <- function() {
+  modules <- c("torch", "numpy", "safetensors", "tifffile", "PIL",
+               "segmentation_models_pytorch")
   ok <- TRUE
   for (mod in modules) {
     avail <- reticulate::py_module_available(mod)
@@ -90,13 +104,36 @@ configurer_python <- function(envname = CONDA_ENV) {
   }
 
   if (!ok) {
-    stop("Modules Python manquants. Installez-les dans l'env '", envname, "':\n",
-         "  conda activate ", envname, "\n",
-         "  pip install torch numpy safetensors tifffile Pillow")
+    stop("Modules Python manquants. Installez-les dans l'env 'maestro':\n",
+         "  conda activate maestro\n",
+         "  pip install torch numpy safetensors tifffile Pillow ",
+         "segmentation-models-pytorch")
   }
 
   message("  Python configure.")
   invisible(NULL)
+}
+
+# Repertoires de recherche conda
+# @keywords internal
+.conda_search_dirs <- function() {
+  if (.Platform$OS.type == "windows") {
+    home <- Sys.getenv("USERPROFILE", Sys.getenv("HOME"))
+    c(file.path(home, "miniforge3"),
+      file.path(home, "mambaforge"),
+      file.path(home, "miniconda3"),
+      file.path(home, "anaconda3"),
+      file.path(Sys.getenv("LOCALAPPDATA"), "miniforge3"),
+      file.path(Sys.getenv("PROGRAMDATA"), "miniforge3"))
+  } else {
+    home <- Sys.getenv("HOME")
+    c(file.path(home, "miniforge3"),
+      file.path(home, "mambaforge"),
+      file.path(home, "miniconda3"),
+      file.path(home, "anaconda3"),
+      "/opt/miniforge3",
+      "/opt/miniconda3")
+  }
 }
 
 #' Chemin vers le module Python d'inference MAESTRO
