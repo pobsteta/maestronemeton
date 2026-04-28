@@ -1,0 +1,55 @@
+# Workflow standard r-lib pour R CMD check.
+# Cf. https://github.com/r-lib/actions/tree/v2/examples
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+name: R-CMD-check
+
+jobs:
+  R-CMD-check:
+    runs-on: ${{ matrix.config.os }}
+
+    name: ${{ matrix.config.os }} (${{ matrix.config.r }})
+
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {os: ubuntu-latest,  r: 'release'}
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+      NOT_CRAN: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.config.r }}
+          http-user-agent: ${{ matrix.config.http-user-agent }}
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          # Suggests heterogenes (lasR via r-universe, hfhub, optparse) sont
+          # exclus en mode dependencies='hard' pour eviter les echecs sur
+          # le runner Ubuntu.
+          extra-packages: |
+            any::rcmdcheck
+            local::.
+          dependencies: '"hard"'
+
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          upload-snapshots: true
+          # On reste tolerant : les warnings ne bloquent pas (e.g. roxygen,
+          # vignettes). A durcir plus tard une fois le package stabilise.
+          error-on: '"error"'
