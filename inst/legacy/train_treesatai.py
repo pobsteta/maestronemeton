@@ -103,14 +103,21 @@ class TreeSatAIDataset(Dataset):
         self.aerial_size = aerial_size
         self.modalites = modalites or ["aerial"]
 
-        # Filtrer les fichiers qui ont un label valide
+        # Filtrer les fichiers qui ont un label valide et une image existante
         self.filenames = []
         self.targets = []
         for fn in filenames:
             label = self._get_label(fn)
-            if label is not None:
-                self.filenames.append(fn)
-                self.targets.append(label)
+            if label is None:
+                continue
+            # Verifier qu'au moins une modalite a un fichier
+            has_data = False
+            if "aerial" in self.modalites:
+                has_data = (self.data_dir / "aerial" / fn).exists()
+            if not has_data:
+                continue
+            self.filenames.append(fn)
+            self.targets.append(label)
 
         print(f"  {len(self.filenames)} patches charges "
               f"(modalites: {', '.join(self.modalites)})")
@@ -135,6 +142,14 @@ class TreeSatAIDataset(Dataset):
         return len(self.filenames)
 
     def __getitem__(self, idx):
+        try:
+            return self._getitem_safe(idx)
+        except Exception:
+            # Image corrompue : retourner une autre image au hasard
+            import random
+            return self._getitem_safe(random.randint(0, len(self) - 1))
+
+    def _getitem_safe(self, idx):
         filename = self.filenames[idx]
         label = self.targets[idx]
         stem = Path(filename).stem  # sans .tif
@@ -543,6 +558,7 @@ def entrainer(args):
 
         val_acc = val_correct / max(val_total, 1)
         val_loss = val_loss / max(val_total, 1)
+
         scheduler.step()
 
         print(f"\nEpoch {epoch+1}/{args.epochs}: "

@@ -1,13 +1,89 @@
+#' Specifications des modalites MAESTRO
+#'
+#' Table declarative des modalites attendues par le modele
+#' `IGNF/MAESTRO_FLAIR-HUB_base`. Chaque entree decrit la forme du patch
+#' a fournir au DataLoader / au pipeline d'inference :
+#'
+#' - `in_channels`    : nombre de canaux pour le `patch_embed` de la modalite ;
+#' - `image_size`     : cote du patch en pixels ;
+#' - `resolution`     : taille de pixel au sol en metres ;
+#' - `patch_size_mae` : stride du `Conv2d(stride=patch_size_mae)` du
+#'    `patch_embed`. `image_size` doit en etre un multiple, sinon le modele
+#'    rogne silencieusement les bords ;
+#' - `window_m`       : fenetre physique = `image_size * resolution`.
+#'
+#' Les valeurs reproduisent la configuration FLAIR-HUB du modele de base
+#' (cf. fiche HF `IGNF/MAESTRO_FLAIR-HUB_base`), a l'echelle 50 m de
+#' PureForest. Les fenetres Sentinel sont elargies a 60 m pour respecter le
+#' multiple de `patch_size_mae=2` sans padding artificiel.
+#'
+#' @return Liste nommee de specifications par modalite
+#' @export
+#' @examples
+#' specs <- modalite_specs()
+#' specs$aerial$image_size  # 256
+#' specs$s2$window_m        # 60
+modalite_specs <- function() {
+  list(
+    aerial = list(in_channels   = 4L,
+                   image_size    = 256L,
+                   resolution    = 0.2,
+                   patch_size_mae = 16L,
+                   window_m       = 51.2),
+    dem    = list(in_channels   = 2L,
+                   image_size    = 256L,
+                   resolution    = 0.2,
+                   patch_size_mae = 32L,
+                   window_m       = 51.2),
+    s2     = list(in_channels   = 10L,
+                   image_size    = 6L,
+                   resolution    = 10,
+                   patch_size_mae = 2L,
+                   window_m       = 60),
+    s1_asc = list(in_channels   = 2L,
+                   image_size    = 6L,
+                   resolution    = 10,
+                   patch_size_mae = 2L,
+                   window_m       = 60),
+    s1_des = list(in_channels   = 2L,
+                   image_size    = 6L,
+                   resolution    = 10,
+                   patch_size_mae = 2L,
+                   window_m       = 60)
+  )
+}
+
+#' Taille de patch par modalite MAESTRO
+#'
+#' Wrapper retro-compatible autour de [modalite_specs()]. Pour de nouveaux
+#' developpements, preferer l'acces direct via `modalite_specs()$<mod>$image_size`.
+#'
+#' @param mod_name Nom de la modalite
+#' @param taille_pixels_ref Taille pour aerial/dem si mod_name n'est pas connue
+#' @return Entier : nombre de pixels du patch
+#' @export
+taille_patch_modalite <- function(mod_name, taille_pixels_ref = 256L) {
+  specs <- modalite_specs()
+  if (mod_name %in% names(specs)) {
+    return(as.integer(specs[[mod_name]]$image_size))
+  }
+  as.integer(taille_pixels_ref)
+}
+
 #' Creer une grille de patches pour l'inference
 #'
 #' Genere une grille reguliere de patches carres couvrant l'AOI.
 #' Seuls les patches qui intersectent l'AOI sont conserves.
 #'
+#' Le pas de la grille doit correspondre a la fenetre physique de la
+#' modalite de reference (typiquement `aerial`). Voir [modalite_specs()].
+#'
 #' @param aoi sf object en Lambert-93
-#' @param taille_patch_m Taille des patches en metres (defaut: 50)
+#' @param taille_patch_m Taille des patches en metres (defaut: 51.2 m,
+#'   correspond a aerial 256 px @ 0,2 m)
 #' @return sf data.frame (grille de patches avec colonne `id`)
 #' @export
-creer_grille_patches <- function(aoi, taille_patch_m = 50) {
+creer_grille_patches <- function(aoi, taille_patch_m = 51.2) {
   message("=== Creation de la grille de patches ===")
 
   bbox <- sf::st_bbox(aoi)
@@ -40,214 +116,107 @@ creer_grille_patches <- function(aoi, taille_patch_m = 50) {
   grille$id <- seq_len(nrow(grille))
 
   message(sprintf("  Patches generes : %d", nrow(grille)))
-  message(sprintf("  Taille patch : %.0f m x %.0f m", taille_patch_m, taille_patch_m))
+  message(sprintf("  Taille patch    : %.1f m x %.1f m",
+                   taille_patch_m, taille_patch_m))
 
   grille
 }
 
-#' Extraire les patches raster depuis un SpatRaster
-#'
-#' Decoupe un raster multi-bandes selon une grille de patches et
-#' retourne les valeurs sous forme de matrices pretes pour Python/NumPy.
-#'
-#' @param r SpatRaster multi-bandes
-#' @param grille sf grille de patches (issue de [creer_grille_patches()])
-#' @param taille_pixels Taille cible de chaque patch en pixels (defaut: 250)
-#' @return Liste de matrices (H*W x C), une par patch
-#' @export
-extraire_patches_raster <- function(r, grille, taille_pixels = 250) {
-  message("=== Extraction des patches raster ===")
-  message(sprintf("  Raster : %d bandes, %d x %d px",
-                   terra::nlyr(r), terra::ncol(r), terra::nrow(r)))
-
-  patches_data <- list()
-  ext_raster <- terra::ext(r)
-  skipped <- 0L
-
-  for (i in seq_len(nrow(grille))) {
-    ext_patch <- terra::ext(sf::st_bbox(grille[i, ]))
-
-    # Verifier que le patch chevauche le raster
-    overlap <- !(ext_patch$xmin >= ext_raster$xmax ||
-                 ext_patch$xmax <= ext_raster$xmin ||
-                 ext_patch$ymin >= ext_raster$ymax ||
-                 ext_patch$ymax <= ext_raster$ymin)
-
-    if (!overlap) {
-      # Patch vide (hors raster) : remplir de NA
-      patches_data[[i]] <- matrix(NA_real_,
-                                   nrow = taille_pixels * taille_pixels,
-                                   ncol = terra::nlyr(r))
-      skipped <- skipped + 1L
-      next
-    }
-
-    patch <- tryCatch(
-      terra::crop(r, ext_patch),
-      error = function(e) NULL
-    )
-
-    if (is.null(patch)) {
-      patches_data[[i]] <- matrix(NA_real_,
-                                   nrow = taille_pixels * taille_pixels,
-                                   ncol = terra::nlyr(r))
-      skipped <- skipped + 1L
-      next
-    }
-
-    if (terra::ncol(patch) != taille_pixels || terra::nrow(patch) != taille_pixels) {
-      template <- terra::rast(
-        ext = ext_patch,
-        nrows = taille_pixels, ncols = taille_pixels,
-        crs = terra::crs(r),
-        nlyrs = terra::nlyr(r)
-      )
-      patch <- terra::resample(patch, template, method = "bilinear")
-    }
-
-    patches_data[[i]] <- terra::values(patch)
-
-    if (i %% 100 == 0 || i == nrow(grille)) {
-      message(sprintf("  Patches extraits : %d / %d", i, nrow(grille)))
-    }
-  }
-
-  if (skipped > 0L) {
-    message(sprintf("  Patches hors emprise raster (ignores) : %d", skipped))
-  }
-  message(sprintf("  Total patches extraits : %d", length(patches_data)))
-  patches_data
-}
-
-#' Taille de patch par modalite MAESTRO
-#'
-#' Retourne la taille de patch en pixels attendue par le modele MAESTRO
-#' pour chaque modalite, selon la resolution native :
-#'   - aerial : 250 pixels (0.2m, 50m / 0.2m)
-#'   - dem    : 50 pixels  (1m, 50m / 1m)
-#'   - s2, s1 : 5 pixels   (10m, 50m / 10m)
-#'
-#' @param mod_name Nom de la modalite
-#' @param taille_pixels_ref Taille de reference (defaut: 250 pour aerial)
-#' @return Entier : nombre de pixels pour ce patch
-#' @export
-taille_patch_modalite <- function(mod_name, taille_pixels_ref = 250L) {
-  # Modalites a 10m de resolution : 50m / 10m = 5 pixels
-  sentinel_mods <- c("s2", "s1_asc", "s1_des")
-  if (mod_name %in% sentinel_mods) {
-    return(5L)
-  }
-  # DEM a 1m de resolution : 50m / 1m = 50 pixels
-  if (mod_name == "dem") {
-    return(50L)
-  }
-  # aerial : taille de reference (250px a 0.2m)
-  as.integer(taille_pixels_ref)
-}
-
 #' Extraire les patches multi-modaux depuis plusieurs SpatRasters
 #'
-#' Pour chaque patch de la grille, extrait les valeurs de chaque modalite
-#' (aerial, dem, s2, s1_asc, s1_des) separement. Chaque modalite est
-#' reechantillonnee a sa taille de patch native :
-#'   - aerial : 250 x 250 pixels (0.2m)
-#'   - dem    : 50 x 50 pixels   (1m)
-#'   - s2, s1_asc, s1_des : 5 x 5 pixels (10m)
+#' Pour chaque cellule de la grille, extrait une fenetre **centree** sur
+#' le centroide de la cellule, dimensionnee selon la specification de
+#' chaque modalite (cf. [modalite_specs()]). Les fenetres Sentinel
+#' (60 m) depassent legerement la cellule aerienne (51,2 m) pour respecter
+#' la contrainte multiple de `patch_size.mae=2`.
 #'
-#' Les donnees sont structurees pour etre passees au modele MAESTRO.
+#' Le contrat de sortie est compatible avec
+#' [executer_inference_multimodal()] : chaque modalite est une matrice
+#' (`H*W` lignes, `C` colonnes) au format produit par `terra::values()`.
 #'
-#' @param modalites Liste nommee de SpatRasters (ex: `list(aerial=..., dem=..., s2=...)`)
+#' @param modalites Liste nommee de SpatRaster, ex.
+#'   `list(aerial = ..., dem = ..., s2 = ...)`
 #' @param grille sf grille de patches (issue de [creer_grille_patches()])
-#' @param taille_pixels Taille cible pour aerial/dem en pixels (defaut: 250)
-#' @return Liste de listes nommees, chaque element contient les matrices
-#'   (H*W x C) pour chaque modalite. Ex: `patches[[i]]$aerial`, `patches[[i]]$s2`
+#' @param specs Specifications, defaut [modalite_specs()]
+#' @return Liste de listes nommees : `patches[[i]]$<mod>` matrice (H*W, C)
 #' @export
-extraire_patches_multimodal <- function(modalites, grille, taille_pixels = 250) {
+extraire_patches_multimodal <- function(modalites, grille,
+                                          specs = modalite_specs()) {
   message("=== Extraction des patches multi-modaux ===")
-  message(sprintf("  Modalites: %s", paste(names(modalites), collapse = ", ")))
 
-  # Validation CRS : toutes les modalites doivent avoir le meme CRS
-  if (length(modalites) > 1) {
-    ref_crs <- terra::crs(modalites[[1]], proj = TRUE)
-    for (mod_name in names(modalites)[-1]) {
-      mod_crs <- terra::crs(modalites[[mod_name]], proj = TRUE)
-      if (mod_crs != ref_crs) {
-        stop(sprintf(
-          "CRS incoherent: '%s' a CRS='%s' mais '%s' a CRS='%s'. Reprojetez d'abord.",
-          names(modalites)[1], ref_crs, mod_name, mod_crs))
-      }
-    }
+  modalites_actives <- names(modalites)
+  inconnues <- setdiff(modalites_actives, names(specs))
+  if (length(inconnues) > 0L) {
+    stop(sprintf(
+      "Modalite(s) non supportee(s): %s. Connues: %s",
+      paste(inconnues, collapse = ", "),
+      paste(names(specs), collapse = ", ")
+    ))
   }
 
-  # Afficher la taille de patch pour chaque modalite
-  for (mod_name in names(modalites)) {
-    tp <- taille_patch_modalite(mod_name, taille_pixels)
-    message(sprintf("    %s: %d x %d px (%d bandes)",
-                     mod_name, tp, tp, terra::nlyr(modalites[[mod_name]])))
+  for (mn in modalites_actives) {
+    s <- specs[[mn]]
+    message(sprintf(
+      "  %-7s: %3d x %3d px (%2d bandes, fenetre %.1f m, patch_size.mae=%d)",
+      mn, s$image_size, s$image_size, s$in_channels, s$window_m,
+      s$patch_size_mae))
   }
 
   n_patches <- nrow(grille)
   patches <- vector("list", n_patches)
-  skipped <- 0L
-
-  # Utiliser la premiere modalite comme reference pour les emprises
-  ref_raster <- modalites[[1]]
-  ext_raster <- terra::ext(ref_raster)
+  skipped <- integer(length(modalites_actives))
+  names(skipped) <- modalites_actives
 
   for (i in seq_len(n_patches)) {
-    ext_patch <- terra::ext(sf::st_bbox(grille[i, ]))
-
-    # Verifier que le patch chevauche le raster
-    overlap <- !(ext_patch$xmin >= ext_raster$xmax ||
-                 ext_patch$xmax <= ext_raster$xmin ||
-                 ext_patch$ymin >= ext_raster$ymax ||
-                 ext_patch$ymax <= ext_raster$ymin)
-
-    if (!overlap) {
-      patch_data <- list()
-      for (mod_name in names(modalites)) {
-        tp <- taille_patch_modalite(mod_name, taille_pixels)
-        n_bands <- terra::nlyr(modalites[[mod_name]])
-        patch_data[[mod_name]] <- matrix(NA_real_,
-                                          nrow = tp * tp,
-                                          ncol = n_bands)
-      }
-      patches[[i]] <- patch_data
-      skipped <- skipped + 1L
-      next
-    }
+    bbox <- sf::st_bbox(grille[i, ])
+    cx <- as.numeric((bbox["xmin"] + bbox["xmax"]) / 2)
+    cy <- as.numeric((bbox["ymin"] + bbox["ymax"]) / 2)
 
     patch_data <- list()
-    for (mod_name in names(modalites)) {
-      r <- modalites[[mod_name]]
-      tp <- taille_patch_modalite(mod_name, taille_pixels)
+    for (mn in modalites_actives) {
+      r <- modalites[[mn]]
+      s <- specs[[mn]]
+      half_w <- s$window_m / 2
+      ext_patch <- terra::ext(cx - half_w, cx + half_w,
+                                cy - half_w, cy + half_w)
 
-      crop_result <- tryCatch(
-        terra::crop(r, ext_patch),
-        error = function(e) NULL
-      )
+      ext_raster <- terra::ext(r)
+      overlap <- !(ext_patch[1] >= ext_raster[2] ||
+                   ext_patch[2] <= ext_raster[1] ||
+                   ext_patch[3] >= ext_raster[4] ||
+                   ext_patch[4] <= ext_raster[3])
 
-      if (is.null(crop_result)) {
-        n_bands <- terra::nlyr(r)
-        patch_data[[mod_name]] <- matrix(NA_real_,
-                                          nrow = tp * tp,
-                                          ncol = n_bands)
+      if (!overlap) {
+        patch_data[[mn]] <- matrix(NA_real_,
+                                     nrow = s$image_size * s$image_size,
+                                     ncol = s$in_channels)
+        skipped[mn] <- skipped[mn] + 1L
         next
       }
 
-      # Reechantillonner a la taille de patch de cette modalite
-      if (terra::ncol(crop_result) != tp ||
-          terra::nrow(crop_result) != tp) {
+      crop_result <- tryCatch(terra::crop(r, ext_patch),
+                                error = function(e) NULL)
+      if (is.null(crop_result)) {
+        patch_data[[mn]] <- matrix(NA_real_,
+                                     nrow = s$image_size * s$image_size,
+                                     ncol = s$in_channels)
+        skipped[mn] <- skipped[mn] + 1L
+        next
+      }
+
+      if (terra::ncol(crop_result) != s$image_size ||
+          terra::nrow(crop_result) != s$image_size) {
         template <- terra::rast(
           ext = ext_patch,
-          nrows = tp, ncols = tp,
+          nrows = s$image_size, ncols = s$image_size,
           crs = terra::crs(r),
           nlyrs = terra::nlyr(r)
         )
-        crop_result <- terra::resample(crop_result, template, method = "bilinear")
+        crop_result <- terra::resample(crop_result, template,
+                                          method = "bilinear")
       }
 
-      patch_data[[mod_name]] <- terra::values(crop_result)
+      patch_data[[mn]] <- terra::values(crop_result)
     }
     patches[[i]] <- patch_data
 
@@ -256,9 +225,37 @@ extraire_patches_multimodal <- function(modalites, grille, taille_pixels = 250) 
     }
   }
 
-  if (skipped > 0L) {
-    message(sprintf("  Patches hors emprise raster (ignores) : %d", skipped))
+  for (mn in modalites_actives) {
+    if (skipped[mn] > 0L) {
+      message(sprintf("  %s : %d patch(es) hors raster (rempli NA)",
+                       mn, skipped[mn]))
+    }
   }
-  message(sprintf("  Total patches extraits : %d", length(patches)))
+  message(sprintf("  Total patches : %d", length(patches)))
   patches
+}
+
+#' Extraire les patches d'un raster unique (mono-modal)
+#'
+#' Variante mono-modale de [extraire_patches_multimodal()] : utilise
+#' uniquement la modalite `aerial`. Conservee pour les usages legers et
+#' les tests d'integration.
+#'
+#' @param r SpatRaster multi-bandes (typiquement RGBI 4 bandes)
+#' @param grille sf grille de patches
+#' @param taille_pixels Taille du patch en pixels (defaut: 256)
+#' @return Liste de matrices (H*W, C)
+#' @export
+extraire_patches_raster <- function(r, grille, taille_pixels = 256L) {
+  patches <- extraire_patches_multimodal(
+    modalites = list(aerial = r),
+    grille = grille,
+    specs = list(aerial = list(in_channels = terra::nlyr(r),
+                                  image_size = as.integer(taille_pixels),
+                                  resolution = NA_real_,
+                                  patch_size_mae = NA_integer_,
+                                  window_m = as.numeric(taille_pixels) *
+                                              terra::res(r)[1]))
+  )
+  lapply(patches, function(p) p$aerial)
 }

@@ -8,7 +8,8 @@
 #   .\inst\scripts\recover_model.ps1 -IP 51.15.x.x -Terminate
 #
 # Actions :
-#   1. Telecharge maestro_treesatai_best.pt depuis l'instance
+#   1. Telecharge le checkpoint .pt et le rapport .report.json
+#      (cible : maestro_pureforest_best.pt ; fallback legacy : maestro_treesatai_best.pt)
 #   2. Telecharge les logs d'entrainement
 #   3. Propose de supprimer l'instance Scaleway
 # =============================================================================
@@ -75,7 +76,7 @@ Log-Info "Verification de l'etat de l'entrainement..."
 $TrainingStatus = ssh -o StrictHostKeyChecking=no "root@$PublicIP" @"
 if tmux has-session -t maestro 2>/dev/null; then
     echo running
-elif [ -f ~/maestro_nemeton/outputs/training/maestro_treesatai_best.pt ]; then
+elif ls /data/outputs/training/*.pt ~/maestronemeton/outputs/training/*.pt 2>/dev/null | grep -q .; then
     echo done
 else
     echo unknown
@@ -117,32 +118,38 @@ if (-not (Test-Path $LocalDir)) {
 Write-Host ""
 Log-Info "=== Recuperation du modele ==="
 
-# Chercher le modele dans /data (volume) ou dans ~/maestro_nemeton (ancien chemin)
-$RemoteDir = ssh -o StrictHostKeyChecking=no "root@$PublicIP" "if [ -d /data/outputs/training ]; then echo /data/outputs/training; else echo ~/maestro_nemeton/outputs/training; fi"
+# Chercher le repertoire distant : /data si volume monte, sinon le clone ~
+$RemoteDir = ssh -o StrictHostKeyChecking=no "root@$PublicIP" "if [ -d /data/outputs/training ]; then echo /data/outputs/training; else echo ~/maestronemeton/outputs/training; fi"
 $RemoteDir = $RemoteDir.Trim()
 Log-Info "Repertoire distant : $RemoteDir"
 
 # Lister les fichiers disponibles
 Log-Info "Fichiers disponibles sur l'instance :"
-ssh -o StrictHostKeyChecking=no "root@$PublicIP" "ls -lh $RemoteDir/*.pt 2>/dev/null || echo '  (aucun fichier .pt)'"
+ssh -o StrictHostKeyChecking=no "root@$PublicIP" "ls -lh $RemoteDir/*.pt $RemoteDir/*.report.json 2>/dev/null || echo '  (aucun fichier .pt)'"
 
-# Telecharger le meilleur modele
-$hasBest = ssh -o StrictHostKeyChecking=no "root@$PublicIP" "test -f $RemoteDir/maestro_treesatai_best.pt && echo yes || echo no"
-if ($hasBest.Trim() -eq "yes") {
-    Log-Info "Telechargement de maestro_treesatai_best.pt..."
-    scp -o StrictHostKeyChecking=no "root@${PublicIP}:$RemoteDir/maestro_treesatai_best.pt" "$LocalDir\"
-    Log-Ok "Modele recupere : $LocalDir\maestro_treesatai_best.pt"
-    Get-Item "$LocalDir\maestro_treesatai_best.pt" | Select-Object Name, Length, LastWriteTime
+# Tirer tous les *.pt et *.report.json (couvre PureForest et le legacy
+# TreeSatAI sans hardcoder les noms)
+Log-Info "Telechargement des checkpoints + rapports..."
+$Recovered = 0
+foreach ($ext in @("pt", "report.json")) {
+    $hasFiles = ssh -o StrictHostKeyChecking=no "root@$PublicIP" "ls $RemoteDir/*.$ext 2>/dev/null | head -1 | grep -q . && echo yes || echo no"
+    if ($hasFiles.Trim() -eq "yes") {
+        scp -o StrictHostKeyChecking=no "root@${PublicIP}:$RemoteDir/*.$ext" "$LocalDir\" 2>$null
+        if ($LASTEXITCODE -eq 0) { $Recovered++ }
+    }
+}
+if ($Recovered -eq 0) {
+    Log-Warn "Aucun .pt ni .report.json trouve dans $RemoteDir"
 } else {
-    Log-Warn "maestro_treesatai_best.pt introuvable"
+    Log-Ok "Fichiers recuperes :"
+    Get-ChildItem -Path $LocalDir -Filter "*.pt" -ErrorAction SilentlyContinue | Select-Object Name, Length, LastWriteTime
+    Get-ChildItem -Path $LocalDir -Filter "*.report.json" -ErrorAction SilentlyContinue | Select-Object Name, Length, LastWriteTime
 }
 
-# Telecharger le modele final
-$hasFinal = ssh -o StrictHostKeyChecking=no "root@$PublicIP" "test -f $RemoteDir/maestro_treesatai_final.pt && echo yes || echo no"
-if ($hasFinal.Trim() -eq "yes") {
-    Log-Info "Telechargement de maestro_treesatai_final.pt..."
-    scp -o StrictHostKeyChecking=no "root@${PublicIP}:$RemoteDir/maestro_treesatai_final.pt" "$LocalDir\"
-    Log-Ok "Modele final recupere : $LocalDir\maestro_treesatai_final.pt"
+# Determiner le nom du best checkpoint pour les instructions finales
+$BestPt = (Get-ChildItem -Path $LocalDir -Filter "*best*.pt" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+if (-not $BestPt) {
+    $BestPt = Join-Path $LocalDir "maestro_pureforest_best.pt"
 }
 
 # Telecharger les logs
@@ -159,12 +166,12 @@ Write-Host "========================================================"
 Write-Host " Recuperation terminee !" -ForegroundColor Green
 Write-Host "========================================================"
 Write-Host ""
-Write-Host "  Modele : $LocalDir\maestro_treesatai_best.pt"
+Write-Host "  Modele : $BestPt"
 Write-Host ""
 Write-Host "  Pour predire sur votre AOI :"
 Write-Host "    Rscript inst\scripts\predict_from_checkpoint.R ``"
 Write-Host "        --aoi data\aoi.gpkg ``"
-Write-Host "        --checkpoint $LocalDir\maestro_treesatai_best.pt"
+Write-Host "        --checkpoint $BestPt"
 Write-Host ""
 
 # --- Nettoyage de l'instance ---

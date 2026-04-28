@@ -510,3 +510,196 @@ download_dem_for_aoi <- function(aoi, output_dir, dem_channels = c("SLOPE", "TWI
   list(dem = dem, dem_path = dem_path, dsm_source = dsm_source,
        dem_channels = dem_channels)
 }
+
+#' Mesurer la couverture LiDAR HD (DSM) d'un raster WMS
+#'
+#' Le WMS LiDAR HD renvoie un raster valide y compris hors couverture
+#' (pixels NA ou nuls). Cette fonction quantifie le % de pixels effectifs.
+#'
+#' @param r SpatRaster a evaluer (1 bande)
+#' @return Pourcentage `[0, 100]` de pixels finis et non nuls
+#' @keywords internal
+.lidar_coverage_pct <- function(r) {
+  if (is.null(r)) return(0)
+  vals <- terra::values(r[[1]])
+  if (length(vals) == 0L) return(0)
+  n_valid <- sum(!is.na(vals) & is.finite(vals) & vals != 0)
+  100 * n_valid / length(vals)
+}
+
+#' Preparer la modalite `dem` MAESTRO pour une AOI (DSM + DTM)
+#'
+#' Construit le raster 2 bandes attendu par la modalite `dem` du modele
+#' MAESTRO : `(DSM, DTM)` dans cet ordre. Deux sources sont supportees :
+#'
+#' **`source = "wms"`** (defaut) : DTM depuis le RGE ALTI 1 m (couverture
+#' nationale, couche WMS `ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES`),
+#' DSM depuis le LiDAR HD IGN (couverture partielle en cours de completion
+#' d'ici 2026, couche `IGNF_LIDAR-HD_MNS_ELEVATION...`). Quand le LiDAR HD
+#' ne couvre pas l'AOI (couverture < `coverage_threshold`), deux strategies
+#' selon `allow_dtm_only_fallback` :
+#' - `TRUE` (defaut) : duplique le DTM comme DSM avec un warning explicite.
+#'   Le CHM (DSM - DTM) sera plat, ce qui degrade le signal pour MAESTRO.
+#'   A reserver aux mode degrade ou tests d'integration.
+#' - `FALSE` : retourne `NULL` pour que l'appelant retire la modalite `dem`
+#'   du pipeline et evite d'injecter des donnees corrompues dans le modele.
+#'
+#' **`source = "las"`** : derivation directe via [lasR][lasR::lasR-package]
+#' a partir des nuages LAZ fournis dans `las_files`. Pipeline TIN sol +
+#' premiers retours, buffer 20 m sur le `LAScatalog`, mosaiquage et crop
+#' sur l'AOI, resample sur la grille aerial. Le telechargement automatique
+#' des tuiles LAZ depuis l'IGN n'est pas (encore) couvert : les chemins
+#' sont a fournir explicitement (cf. catalogue cartes.gouv.fr).
+#'
+#' @param aoi sf object en Lambert-93.
+#' @param output_dir Repertoire de sortie (ecrit `dem_2bands.tif`).
+#' @param rgbi SpatRaster aerial de reference pour le reechantillonnage a
+#'   0,2 m (NULL = garde la resolution native 1 m).
+#' @param source `"wms"` (defaut) pour Geoplateforme IGN. `"las"` pour
+#'   derivation locale via lasR a partir de `las_files`.
+#' @param coverage_threshold Pourcentage minimum de pixels LiDAR HD valides
+#'   pour considerer la couverture suffisante en mode WMS (defaut : 10).
+#' @param allow_dtm_only_fallback Mode WMS uniquement. Si TRUE et couverture
+#'   insuffisante, utilise DSM = DTM (warning) ; sinon retourne NULL.
+#' @param las_files Mode `"las"` uniquement : vecteur de chemins vers les
+#'   tuiles LAZ/LAS a traiter (1 km x 1 km IGN typiquement).
+#' @param ncores Mode `"las"` uniquement : nombre de coeurs paralleles
+#'   pour le pipeline lasR (defaut : 2).
+#' @return Liste avec
+#'   - `dem` : SpatRaster 2 bandes nommees `DSM`, `DTM`
+#'   - `dem_path` : chemin du GeoTIFF ecrit
+#'   - `dsm_source` : `"lidar_hd"` | `"rge_alti_fallback"` | `"lasR"` | `"cache"`
+#'   - `lidar_hd_coverage_pct` : couverture LiDAR HD mesuree (mode WMS) ou
+#'     NA (mode LAS)
+#'   Renvoie NULL si le DTM RGE ALTI ne peut pas etre telecharge (mode WMS),
+#'   ou si le LiDAR HD est insuffisant et `allow_dtm_only_fallback = FALSE`.
+#' @export
+prepare_dem <- function(aoi, output_dir, rgbi = NULL,
+                        source = c("wms", "las"),
+                        coverage_threshold = 10,
+                        allow_dtm_only_fallback = TRUE,
+                        las_files = NULL,
+                        ncores = 2L) {
+  source <- match.arg(source)
+  if (source == "las") {
+    if (is.null(las_files) || length(las_files) == 0L) {
+      stop("source = 'las' requiert l'argument `las_files` ",
+           "(vecteur de chemins vers des fichiers LAZ/LAS).")
+    }
+    return(prepare_dem_las(
+      aoi = aoi, las_files = las_files,
+      output_dir = output_dir, rgbi = rgbi, ncores = ncores
+    ))
+  }
+
+  fs::dir_create(output_dir)
+
+  dem_path <- file.path(output_dir, "dem_2bands.tif")
+
+  # Cache : on suppose le fichier valide si present
+  if (file.exists(dem_path)) {
+    message("\n=== DEM 2 bandes deja telecharge (cache) ===")
+    dem <- terra::rast(dem_path)
+    names(dem) <- c("DSM", "DTM")
+    return(list(dem = dem, dem_path = dem_path,
+                dsm_source = "cache",
+                lidar_hd_coverage_pct = NA_real_))
+  }
+
+  bbox <- as.numeric(sf::st_bbox(sf::st_union(aoi)))
+  aoi_vect <- terra::vect(sf::st_union(aoi))
+
+  # --- DTM (RGE ALTI 1 m, couverture nationale) ---
+  message("\n=== Preparation DEM MAESTRO (DSM + DTM) ===")
+  message("--- DTM : RGE ALTI 1 m (WMS Geoplateforme) ---")
+
+  dtm <- tryCatch(
+    download_ign_tiled(bbox, layer = .ign_config$LAYER_MNT,
+                       res_m = .ign_config$RES_DEM,
+                       output_dir = output_dir, prefix = "dtm",
+                       styles = "normal"),
+    error = function(e) { message("  DTM non telecharge: ", e$message); NULL }
+  )
+
+  if (is.null(dtm)) {
+    warning("Aucune donnee DTM RGE ALTI telechargee, modalite dem indisponible.")
+    return(NULL)
+  }
+
+  dtm <- terra::crop(dtm, aoi_vect)
+  names(dtm) <- "DTM"
+
+  # --- DSM (LiDAR HD, couverture partielle) ---
+  message("--- DSM : LiDAR HD (WMS Geoplateforme) ---")
+  dsm_raw <- tryCatch(
+    download_ign_tiled(bbox, layer = .ign_config$LAYER_MNS,
+                       res_m = .ign_config$RES_DEM,
+                       output_dir = output_dir, prefix = "dsm",
+                       styles = "normal"),
+    error = function(e) {
+      message("  DSM LiDAR HD non telecharge: ", e$message); NULL
+    }
+  )
+  if (!is.null(dsm_raw)) {
+    dsm_raw <- terra::crop(dsm_raw, aoi_vect)
+  }
+
+  coverage_pct <- .lidar_coverage_pct(dsm_raw)
+  message(sprintf("  Couverture LiDAR HD : %.1f %% (seuil : %g %%)",
+                  coverage_pct, coverage_threshold))
+
+  if (coverage_pct >= coverage_threshold) {
+    dsm <- dsm_raw
+    dsm_source <- "lidar_hd"
+  } else {
+    if (!allow_dtm_only_fallback) {
+      warning(sprintf(
+        "Couverture LiDAR HD insuffisante (%.1f %% < %g %%) et fallback ",
+        coverage_pct, coverage_threshold),
+        "desactive : modalite dem indisponible.")
+      return(NULL)
+    }
+    warning(sprintf(
+      "Couverture LiDAR HD insuffisante (%.1f %% < %g %%). ",
+      coverage_pct, coverage_threshold),
+      "Fallback DSM = DTM : le CHM derive sera plat et le signal MAESTRO ",
+      "sur la modalite dem sera degrade. Lancer avec ",
+      "allow_dtm_only_fallback = FALSE pour retirer la modalite a la place.")
+    dsm <- dtm
+    dsm_source <- "rge_alti_fallback"
+  }
+  names(dsm) <- "DSM"
+
+  # --- Reechantillonnage sur la grille aerial 0,2 m ---
+  if (!is.null(rgbi)) {
+    message("Reechantillonnage DEM 1 m -> 0,2 m sur grille aerial...")
+    dtm <- terra::resample(dtm, rgbi, method = "bilinear")
+    dsm <- terra::resample(dsm, rgbi, method = "bilinear")
+  }
+
+  # --- Empilage DSM + DTM (ordre impose par MAESTRO) ---
+  dem <- c(dsm, dtm)
+  names(dem) <- c("DSM", "DTM")
+
+  terra::writeRaster(dem, dem_path, overwrite = TRUE, gdal = c("COMPRESS=LZW"))
+
+  dtm_vals <- terra::values(dtm, na.rm = TRUE)
+  if (length(dtm_vals) > 0 && any(is.finite(dtm_vals))) {
+    message(sprintf("  Altitude DTM : %.0f - %.0f m",
+                    min(dtm_vals, na.rm = TRUE),
+                    max(dtm_vals, na.rm = TRUE)))
+  }
+  message(sprintf("  Source DSM : %s", dsm_source))
+  message(sprintf("DEM : %s (%d x %d px, %d bandes)",
+                  dem_path, terra::ncol(dem), terra::nrow(dem),
+                  terra::nlyr(dem)))
+
+  tile_files <- fs::dir_ls(output_dir, glob = "d[ts]m_tile_*.tif")
+  if (length(tile_files) > 0) fs::file_delete(tile_files)
+
+  dem <- terra::rast(dem_path)
+  names(dem) <- c("DSM", "DTM")
+  list(dem = dem, dem_path = dem_path,
+       dsm_source = dsm_source,
+       lidar_hd_coverage_pct = coverage_pct)
+}

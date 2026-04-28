@@ -18,7 +18,7 @@ Description: Automatic recognition of forest tree species (13 PureForest classes
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Depends:
     R (>= 4.1)
 Imports:
@@ -35,8 +35,12 @@ Suggests:
     patchwork,
     scales,
     hfhub,
+    lasR,
     optparse,
     rmarkdown,
     knitr,
     testthat (>= 3.0.0)
+Additional_repositories:
+    https://r-lidar.r-universe.dev
 VignetteBuilder: knitr
+Config/testthat/edition: 3

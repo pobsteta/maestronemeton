@@ -8,11 +8,11 @@
 # puis notifie que le modele est pret a etre recupere.
 #
 # Usage (sur l'instance GPU) :
-#   curl -sL https://raw.githubusercontent.com/pobsteta/maestro_nemeton/main/inst/scripts/cloud_train.sh | bash
+#   curl -sL https://raw.githubusercontent.com/pobsteta/maestronemeton/main/inst/scripts/cloud_train.sh | bash
 #
 # Ou manuellement :
-#   git clone https://github.com/pobsteta/maestro_nemeton.git
-#   cd maestro_nemeton
+#   git clone https://github.com/pobsteta/maestronemeton.git
+#   cd maestronemeton
 #   bash inst/scripts/cloud_train.sh
 #
 # Variables d'environnement (toutes optionnelles) :
@@ -123,14 +123,16 @@ trap '_on_error $LINENO' ERR
 
 echo "========================================================"
 echo " MAESTRO - Entrainement GPU sur Scaleway"
-echo " TreeSatAI -> 8 classes regroupees"
+echo " (script legacy TreeSatAI -> 8 classes regroupees,"
+echo "  cible PureForest 13 classes en cours de migration"
+echo "  cf. DEV_PLAN.md phase 1)"
 echo "========================================================"
 echo ""
 
 # --- Config (surchargeables par variables d'environnement) ---
-REPO_URL="https://github.com/pobsteta/maestro_nemeton.git"
+REPO_URL="https://github.com/pobsteta/maestronemeton.git"
 BRANCH="${BRANCH:-main}"
-WORK_DIR="$HOME/maestro_nemeton"
+WORK_DIR="$HOME/maestronemeton"
 # Utiliser /data si le volume data est monte pour eviter de remplir le disque root
 if [ -d /data ] && mountpoint -q /data 2>/dev/null; then
     DATA_DIR="${DATA_DIR:-/data/treesatai}"
@@ -262,7 +264,7 @@ Vous recevrez une notification quand ce sera termine."
 N_WORKERS=$(nproc --ignore=2 2>/dev/null || echo 4)
 N_WORKERS=$((N_WORKERS > 8 ? 8 : N_WORKERS))
 
-$PYTHON inst/python/train_treesatai.py \
+$PYTHON inst/legacy/train_treesatai.py \
     --checkpoint "$CHECKPOINT" \
     --data-dir "$DATA_DIR" \
     --output-dir "$OUTPUT_DIR" \

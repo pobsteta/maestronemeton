@@ -1,47 +1,54 @@
 #!/bin/bash
 # =============================================================================
 # deploy_scaleway.sh
-# Guide complet pour deployer l'entrainement MAESTRO sur une instance GPU Scaleway.
+# Deploie le fine-tuning MAESTRO sur PureForest (13 classes) sur une instance
+# GPU Scaleway. Cible `cloud_train_pureforest.sh` (P1 + P2 du DEV_PLAN).
 #
 # Ce script est execute DEPUIS VOTRE MACHINE LOCALE. Il :
 #   1. Cree une instance GPU Scaleway (via CLI scw)
-#   2. Envoie le script d'entrainement sur l'instance
-#   3. Lance l'entrainement en arriere-plan (tmux)
+#   2. Monte le volume data sur /data
+#   3. Envoie cloud_train_pureforest.sh, le lance dans tmux avec les env
+#      vars adaptees (BRANCH, MODALITIES, PROBE_EPOCHS, ...)
 #   4. Donne les commandes pour suivre et recuperer le modele
+#
+# Le script distant est self-contained : il clone la branche choisie,
+# installe les deps Python pinnees (TR-03), pre-traite PureForest aerial
+# + dem (si MODALITIES contient dem), et lance pureforest_finetune.py.
 #
 # Pre-requis :
 #   - CLI Scaleway installee et configuree (scw init)
 #   - Cle SSH configuree dans Scaleway
 #   - Projet/organisation Scaleway active
+#   - Le code a deployer doit etre **pousse sur le remote** (la branche
+#     est clonee depuis github.com/pobsteta/maestronemeton)
 #
 # Usage :
 #   bash inst/scripts/deploy_scaleway.sh [OPTIONS]
 #
 # Options :
-#   --instance-type TYPE   Type d'instance GPU (defaut: GPU-3070-S)
+#   --instance-type TYPE   Type d'instance GPU (defaut: L4-1-24G)
 #   --image IMAGE          Image OS (defaut: ubuntu_jammy_gpu_os_12)
 #   --zone ZONE            Zone Scaleway (defaut: fr-par-2)
-#   --epochs N             Nombre d'epochs (defaut: 30)
-#   --batch-size N         Taille batch (defaut: 64)
-#   --lr FLOAT             Learning rate (defaut: 1e-3)
-#   --modalites MODS       Modalites (defaut: aerial). Alias: --modalities
-#   --unfreeze             Degeler le backbone (fine-tuning complet)
-#   --segmentation         Mode segmentation (decodeur NDP0 au lieu de TreeSatAI)
-#   --aoi AOI_PATH         Chemin local vers l'AOI (mode segmentation)
+#   --branch NAME          Branche git a cloner (defaut: branche locale courante)
+#   --modalities MODS      Modalites virgule-separees (defaut: aerial)
+#                          Ex: aerial,dem (active prepare_pureforest_dem.py)
+#   --probe-epochs N       Epochs linear probe (defaut: 10)
+#   --finetune-epochs N    Epochs fine-tune complet (defaut: 50)
+#   --batch-size N         Taille batch (defaut: 24, recommande L4-1-24G)
+#   --patience N           Early stopping patience (defaut: 5)
+#   --notify-email EMAIL   Email pour notifications debut/fin
+#   --notify-webhook URL   Webhook (ntfy.sh / Slack) pour notifications
 #   --name NAME            Nom de l'instance (defaut: maestro-train)
-#   --notify-webhook URL   URL webhook pour notification (ntfy.sh, Slack)
-#   --notify-email EMAIL   Email de notification (debut + fin entrainement)
-#   --branch BRANCH        Branche git a cloner sur l'instance (defaut: main)
+#   --data-volume GB       Volume data en Go (defaut: 200, ~145 Go data + marges)
 #   --dry-run              Afficher les commandes sans executer
 #
 # Instances GPU Scaleway recommandees :
-#   GPU-3070-S   : RTX 3070 (8 Go VRAM)  - ~0.76 EUR/h - suffisant pour aerial seul
-#   L4-1-24G     : NVIDIA L4 (24 Go VRAM) - ~0.92 EUR/h - recommande multi-modal
+#   GPU-3070-S   : RTX 3070 (8 Go VRAM)  - ~0.76 EUR/h - aerial seul, batch 16
+#   L4-1-24G     : NVIDIA L4 (24 Go VRAM) - ~0.92 EUR/h - aerial+dem, batch 24
 #   H100-1-80G   : H100 (80 Go VRAM)     - ~3.50 EUR/h - entrainement rapide
 #
-# Cout estime pour 30 epochs (aerial, batch_size=64) :
-#   GPU-3070-S : ~2-3h -> ~2 EUR
-#   L4-1-24G   : ~1-2h -> ~1.50 EUR
+# Cout estime pour le run complet aerial+dem (probe 10 + finetune 50) :
+#   L4-1-24G   : ~14-18h -> ~13-17 EUR (incluant ~1h de pre-traitement)
 # =============================================================================
 
 set -euo pipefail
@@ -59,44 +66,43 @@ log_warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 log_error() { echo -e "${RED}[ERREUR]${NC} $*"; }
 
 # --- Configuration par defaut ---
-INSTANCE_TYPE="GPU-3070-S"
+INSTANCE_TYPE="L4-1-24G"
 IMAGE="ubuntu_jammy_gpu_os_12"
 ZONE="fr-par-2"
 INSTANCE_NAME="maestro-train"
-EPOCHS=30
-BATCH_SIZE=64
-LR="1e-3"
-MODALITES="aerial"
-UNFREEZE=""
-SEGMENTATION=false
-FLAIR_NIVEAU=""
-AOI_LOCAL=""
-DRY_RUN=false
-NOTIFY_WEBHOOK=""
+DATA_VOLUME_GB=200
+# Branche par defaut : la branche locale courante. Permet `bash deploy_scaleway.sh`
+# directement depuis n'importe quelle branche de travail sans avoir a la nommer.
+DEFAULT_BRANCH=$(git -C "$(dirname "$0")/../.." rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
+BRANCH="$DEFAULT_BRANCH"
+MODALITIES="aerial"
+PROBE_EPOCHS=10
+FINETUNE_EPOCHS=50
+BATCH_SIZE=24
+PATIENCE=5
 NOTIFY_EMAIL=""
-BRANCH="main"
+NOTIFY_WEBHOOK=""
+DRY_RUN=false
 
 # --- Parse arguments ---
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --instance-type) INSTANCE_TYPE="$2"; shift 2 ;;
-        --image)         IMAGE="$2"; shift 2 ;;
-        --zone)          ZONE="$2"; shift 2 ;;
-        --epochs)        EPOCHS="$2"; shift 2 ;;
-        --batch-size)    BATCH_SIZE="$2"; shift 2 ;;
-        --lr)            LR="$2"; shift 2 ;;
-        --modalites|--modalities) MODALITES="$2"; shift 2 ;;
-        --unfreeze)      UNFREEZE="--unfreeze"; shift ;;
-        --segmentation)  SEGMENTATION=true; shift ;;
-        --flair)         FLAIR_NIVEAU="$2"; SEGMENTATION=true; shift 2 ;;
-        --aoi)           AOI_LOCAL="$2"; shift 2 ;;
-        --name)          INSTANCE_NAME="$2"; shift 2 ;;
-        --notify-webhook) NOTIFY_WEBHOOK="$2"; shift 2 ;;
-        --notify-email)  NOTIFY_EMAIL="$2"; shift 2 ;;
-        --branch)        BRANCH="$2"; shift 2 ;;
-        --dry-run)       DRY_RUN=true; shift ;;
+        --instance-type)   INSTANCE_TYPE="$2"; shift 2 ;;
+        --image)           IMAGE="$2"; shift 2 ;;
+        --zone)            ZONE="$2"; shift 2 ;;
+        --branch)          BRANCH="$2"; shift 2 ;;
+        --modalities|--modalites) MODALITIES="$2"; shift 2 ;;
+        --probe-epochs)    PROBE_EPOCHS="$2"; shift 2 ;;
+        --finetune-epochs) FINETUNE_EPOCHS="$2"; shift 2 ;;
+        --batch-size)      BATCH_SIZE="$2"; shift 2 ;;
+        --patience)        PATIENCE="$2"; shift 2 ;;
+        --notify-email)    NOTIFY_EMAIL="$2"; shift 2 ;;
+        --notify-webhook)  NOTIFY_WEBHOOK="$2"; shift 2 ;;
+        --name)            INSTANCE_NAME="$2"; shift 2 ;;
+        --data-volume)     DATA_VOLUME_GB="$2"; shift 2 ;;
+        --dry-run)         DRY_RUN=true; shift ;;
         -h|--help)
-            head -45 "$0" | tail -40
+            head -55 "$0" | tail -50
             exit 0
             ;;
         *) log_error "Option inconnue: $1"; exit 1 ;;
@@ -109,29 +115,19 @@ echo " MAESTRO - Deploiement GPU sur Scaleway"
 echo "========================================================"
 echo ""
 log_info "Configuration :"
-echo "  Instance type : $INSTANCE_TYPE"
-echo "  Image         : $IMAGE"
-echo "  Zone          : $ZONE"
-echo "  Nom           : $INSTANCE_NAME"
-echo "  Epochs        : $EPOCHS"
-echo "  Batch size    : $BATCH_SIZE"
-echo "  Learning rate : $LR"
-echo "  Modalites     : $MODALITES"
-echo "  Unfreeze      : ${UNFREEZE:-non}"
-echo "  Branche       : $BRANCH"
-echo "  Mode          : $(if $SEGMENTATION; then echo 'segmentation NDP0'; else echo 'classification TreeSatAI'; fi)"
-if [ -n "$FLAIR_NIVEAU" ]; then
-echo "  FLAIR niveau  : $FLAIR_NIVEAU"
-fi
-if [ -n "$AOI_LOCAL" ]; then
-echo "  AOI locale    : $AOI_LOCAL"
-fi
-if [ -n "$NOTIFY_WEBHOOK" ]; then
-echo "  Webhook       : $NOTIFY_WEBHOOK"
-fi
-if [ -n "$NOTIFY_EMAIL" ]; then
-echo "  Email notif   : $NOTIFY_EMAIL"
-fi
+echo "  Instance type   : $INSTANCE_TYPE"
+echo "  Image           : $IMAGE"
+echo "  Zone            : $ZONE"
+echo "  Nom             : $INSTANCE_NAME"
+echo "  Volume data     : ${DATA_VOLUME_GB} Go"
+echo "  Branche git     : $BRANCH"
+echo "  Modalites       : $MODALITIES"
+echo "  Probe epochs    : $PROBE_EPOCHS"
+echo "  Fine-tune epochs: $FINETUNE_EPOCHS"
+echo "  Batch size      : $BATCH_SIZE"
+echo "  Patience        : $PATIENCE"
+[ -n "$NOTIFY_EMAIL" ]   && echo "  Notify email    : $NOTIFY_EMAIL"
+[ -n "$NOTIFY_WEBHOOK" ] && echo "  Notify webhook  : (defini)"
 echo ""
 
 # --- Verifier les pre-requis ---
@@ -153,7 +149,7 @@ if ! command -v scw &>/dev/null; then
 fi
 
 # Verifier que scw est configure
-if ! scw account ssh list-keys &>/dev/null 2>&1; then
+if ! scw account project get &>/dev/null 2>&1; then
     log_error "CLI Scaleway non configuree. Executez : scw init"
     exit 1
 fi
@@ -170,6 +166,7 @@ CREATE_CMD="scw instance server create \
     zone=$ZONE \
     name=$INSTANCE_NAME \
     ip=new \
+    additional-volumes.0=block:${DATA_VOLUME_GB}GB \
     --output json"
 
 if $DRY_RUN; then
@@ -189,39 +186,77 @@ if $DRY_RUN; then
     echo "# 3. Recuperer l'IP"
     echo "IP=\$(scw instance server get <SERVER_ID> zone=$ZONE -o json | jq -r '.public_ip.address')"
     echo ""
-    echo "# 4. Copier et lancer le script d'entrainement"
-    if $SEGMENTATION; then
-    echo "scp inst/scripts/cloud_train_segmentation.sh root@\$IP:~/"
-    if [ -n "$FLAIR_NIVEAU" ]; then
-    echo "ssh root@\$IP 'FLAIR_NIVEAU=$FLAIR_NIVEAU EPOCHS=$EPOCHS BATCH_SIZE=$BATCH_SIZE LR=$LR MODALITES=$MODALITES bash ~/cloud_train_segmentation.sh'"
-    elif [ -n "$AOI_LOCAL" ]; then
-    echo "scp $AOI_LOCAL root@\$IP:/data/aoi.gpkg"
-    echo "ssh root@\$IP 'AOI_PATH=/data/aoi.gpkg EPOCHS=$EPOCHS BATCH_SIZE=$BATCH_SIZE LR=$LR MODALITES=$MODALITES bash ~/cloud_train_segmentation.sh'"
-    else
-    echo "# Upload des patches prepares :"
-    echo "scp -r data/segmentation/ root@\$IP:/data/segmentation/"
-    echo "ssh root@\$IP 'EPOCHS=$EPOCHS BATCH_SIZE=$BATCH_SIZE LR=$LR MODALITES=$MODALITES bash ~/cloud_train_segmentation.sh'"
-    fi
+    echo "# 4. Monter le volume data sur /data"
+    echo "scp inst/scripts/mount_data.sh root@\$IP:~/"
+    echo "ssh root@\$IP 'bash ~/mount_data.sh'"
     echo ""
-    echo "# 5. Recuperer le decodeur"
-    echo "scp root@\$IP:~/maestro_nemeton/outputs/segmentation/segmenter_ndp0_best.pt ."
-    else
-    echo "scp inst/scripts/cloud_train.sh root@\$IP:~/"
-    echo "ssh root@\$IP 'EPOCHS=$EPOCHS BATCH_SIZE=$BATCH_SIZE bash ~/cloud_train.sh'"
+    echo "# 5. Copier et lancer le script d'entrainement (cloud_train_pureforest.sh)"
+    echo "scp inst/scripts/cloud_train_pureforest.sh root@\$IP:~/"
+    echo "ssh root@\$IP 'BRANCH=$BRANCH MODALITIES=$MODALITIES \\"
+    echo "    PROBE_EPOCHS=$PROBE_EPOCHS FINETUNE_EPOCHS=$FINETUNE_EPOCHS \\"
+    echo "    BATCH_SIZE=$BATCH_SIZE PATIENCE=$PATIENCE \\"
+    echo "    bash ~/cloud_train_pureforest.sh'"
     echo ""
-    echo "# 5. Recuperer le modele"
-    echo "scp root@\$IP:~/maestro_nemeton/outputs/training/maestro_treesatai_best.pt ."
-    fi
+    echo "# 6. Recuperer le modele"
+    echo "scp root@\$IP:/data/outputs/training/maestro_pureforest_best.pt ."
     echo ""
-    echo "# 6. Supprimer l'instance"
+    echo "# 7. Supprimer l'instance"
     echo "scw instance server terminate <SERVER_ID> zone=$ZONE with-ip=true"
     exit 0
 fi
 
-log_info "Creation de l'instance $INSTANCE_TYPE..."
-SERVER_JSON=$(eval "$CREATE_CMD")
-SERVER_ID=$(echo "$SERVER_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
-log_ok "Instance creee: $SERVER_ID"
+# Verifier si une instance avec le meme nom existe deja
+log_info "Verification des instances existantes..."
+EXISTING_JSON=$(scw instance server list zone="$ZONE" name="$INSTANCE_NAME" -o json 2>/dev/null || echo "[]")
+EXISTING_COUNT=$(echo "$EXISTING_JSON" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
+
+if [ "$EXISTING_COUNT" -gt 0 ]; then
+    EXISTING_ID=$(echo "$EXISTING_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+    EXISTING_STATE=$(echo "$EXISTING_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['state'])")
+    log_warn "Instance '$INSTANCE_NAME' deja existante: $EXISTING_ID (etat: $EXISTING_STATE)"
+
+    if [ "$EXISTING_STATE" = "running" ]; then
+        log_warn "Reutilisation de l'instance en cours d'execution."
+        SERVER_ID="$EXISTING_ID"
+    elif [ "$EXISTING_STATE" = "stopped" ] || [ "$EXISTING_STATE" = "stopped in place" ]; then
+        log_info "Demarrage de l'instance arretee..."
+        SERVER_ID="$EXISTING_ID"
+        scw instance server action run "$SERVER_ID" zone="$ZONE" >/dev/null 2>&1
+    elif echo "$EXISTING_STATE" | grep -qE "stopping|locked"; then
+        log_info "Instance en cours de suppression, attente..."
+        WAIT_MAX=120
+        WAIT_ELAPSED=0
+        while [ "$WAIT_ELAPSED" -lt "$WAIT_MAX" ]; do
+            sleep 10
+            WAIT_ELAPSED=$((WAIT_ELAPSED + 10))
+            CHECK_JSON=$(scw instance server list zone="$ZONE" name="$INSTANCE_NAME" -o json 2>/dev/null || echo "[]")
+            CHECK_COUNT=$(echo "$CHECK_JSON" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
+            if [ "$CHECK_COUNT" -eq 0 ]; then
+                log_ok "Instance supprimee apres ${WAIT_ELAPSED}s"
+                EXISTING_COUNT=0
+                break
+            fi
+            log_info "  Attente... (${WAIT_ELAPSED}s/${WAIT_MAX}s)"
+        done
+        if [ "$EXISTING_COUNT" -gt 0 ]; then
+            log_error "Instance toujours presente apres ${WAIT_MAX}s"
+            log_info "Supprimez-la manuellement : scw instance server terminate $EXISTING_ID zone=$ZONE with-ip=true"
+            exit 1
+        fi
+    else
+        log_error "Instance dans un etat inattendu : $EXISTING_STATE"
+        log_info "Supprimez-la manuellement : scw instance server terminate $EXISTING_ID zone=$ZONE with-ip=true"
+        exit 1
+    fi
+fi
+
+# Creer une nouvelle instance si aucune existante reutilisable
+if [ -z "${SERVER_ID:-}" ]; then
+    log_info "Creation de l'instance $INSTANCE_TYPE..."
+    SERVER_JSON=$(eval "$CREATE_CMD")
+    SERVER_ID=$(echo "$SERVER_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+    log_ok "Instance creee: $SERVER_ID"
+fi
 
 # --- Etape 2 : Attendre que l'instance soit prete ---
 echo ""
@@ -232,7 +267,16 @@ scw instance server wait "$SERVER_ID" zone="$ZONE" timeout=600s
 
 # Recuperer l'IP publique
 SERVER_INFO=$(scw instance server get "$SERVER_ID" zone="$ZONE" -o json)
-PUBLIC_IP=$(echo "$SERVER_INFO" | python3 -c "import sys,json; print(json.load(sys.stdin)['public_ip']['address'])")
+PUBLIC_IP=$(echo "$SERVER_INFO" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+if 'public_ip' in data and data['public_ip']:
+    print(data['public_ip']['address'])
+elif 'public_ips' in data and data['public_ips']:
+    print(data['public_ips'][0]['address'])
+else:
+    sys.exit('Aucune IP publique trouvee')
+")
 log_ok "Instance prete: $PUBLIC_IP"
 
 # --- Etape 3 : Attendre que SSH soit disponible ---
@@ -268,87 +312,51 @@ while [ "$SSH_ELAPSED" -lt "$SSH_TIMEOUT" ]; do
     sleep "$SSH_INTERVAL"
 done
 
-# --- Etape 4 : Deployer et lancer l'entrainement ---
+# --- Etape 3b : Monter le volume data ---
 echo ""
-log_info "=== Etape 4 : Deploiement de l'entrainement ==="
+log_info "=== Etape 3b : Montage du volume data ==="
 
-# Copier le script d'entrainement
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-if $SEGMENTATION; then
-    TRAIN_SCRIPT="cloud_train_segmentation.sh"
-    RESULT_FILE="segmenter_ndp0_best.pt"
-    RESULT_DIR="outputs/segmentation"
-else
-    TRAIN_SCRIPT="cloud_train.sh"
-    RESULT_FILE="maestro_treesatai_best.pt"
-    RESULT_DIR="outputs/training"
-fi
+log_info "Formatage et montage du volume data sur /data..."
+scp -o StrictHostKeyChecking=no "$REPO_ROOT/inst/scripts/mount_data.sh" "root@$PUBLIC_IP:~/"
+ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" "bash ~/mount_data.sh"
+log_ok "Volume data monte sur /data"
 
-log_info "Envoi du script d'entrainement ($TRAIN_SCRIPT)..."
-scp -o StrictHostKeyChecking=no "$REPO_ROOT/inst/scripts/$TRAIN_SCRIPT" "root@$PUBLIC_IP:~/"
+# --- Etape 4 : Deployer et lancer l'entrainement ---
+echo ""
+log_info "=== Etape 4 : Deploiement de cloud_train_pureforest.sh ==="
 
-# Envoyer l'AOI si fourni (mode segmentation)
-if $SEGMENTATION && [ -n "$AOI_LOCAL" ]; then
-    log_info "Envoi de l'AOI: $AOI_LOCAL"
-    ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" "mkdir -p /data"
-    scp -o StrictHostKeyChecking=no "$AOI_LOCAL" "root@$PUBLIC_IP:/data/aoi.gpkg"
-fi
+log_info "Envoi du script d'entrainement PureForest..."
+scp -o StrictHostKeyChecking=no \
+    "$REPO_ROOT/inst/scripts/cloud_train_pureforest.sh" \
+    "root@$PUBLIC_IP:~/"
 
-# Lancer l'entrainement dans tmux (persistent meme si SSH deconnecte)
-log_info "Lancement de l'entrainement dans tmux..."
+# Installer tmux pour la persistance, puis lancer le pipeline complet
+# (clone branche -> pip install pinne -> prepare aerial[+dem] -> finetune).
+log_info "Installation tmux + lancement de l'entrainement..."
+ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" bash <<REMOTE_EOF
+    set -e
+    apt-get update -qq && apt-get install -y -qq tmux > /dev/null 2>&1
 
-NOTIFY_ENV=""
-if [ -n "$NOTIFY_WEBHOOK" ]; then
-    NOTIFY_ENV="export NOTIFY_WEBHOOK=$NOTIFY_WEBHOOK"
-fi
-if [ -n "$NOTIFY_EMAIL" ]; then
-    NOTIFY_ENV="$NOTIFY_ENV${NOTIFY_ENV:+; }export NOTIFY_EMAIL=$NOTIFY_EMAIL"
-fi
+    cat > /root/run_train.sh <<'TRAIN_EOF'
+#!/bin/bash
+export BRANCH="${BRANCH}"
+export MODALITIES="${MODALITIES}"
+export PROBE_EPOCHS="${PROBE_EPOCHS}"
+export FINETUNE_EPOCHS="${FINETUNE_EPOCHS}"
+export BATCH_SIZE="${BATCH_SIZE}"
+export PATIENCE="${PATIENCE}"
+export NOTIFY_EMAIL="${NOTIFY_EMAIL}"
+export NOTIFY_WEBHOOK="${NOTIFY_WEBHOOK}"
+bash /root/cloud_train_pureforest.sh 2>&1 | tee /root/train.log
+TRAIN_EOF
+    chmod +x /root/run_train.sh
 
-if $SEGMENTATION; then
-    EXTRA_ENV=""
-    if [ -n "$FLAIR_NIVEAU" ]; then
-        EXTRA_ENV="export FLAIR_NIVEAU=$FLAIR_NIVEAU"
-    elif [ -n "$AOI_LOCAL" ]; then
-        EXTRA_ENV="export AOI_PATH=/data/aoi.gpkg"
-    fi
-    ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" bash -c "'
-        apt-get update -qq && apt-get install -y -qq tmux > /dev/null 2>&1
-        tmux new-session -d -s maestro \"
-            $EXTRA_ENV
-            $NOTIFY_ENV
-            export BRANCH=$BRANCH
-            export EPOCHS=$EPOCHS
-            export BATCH_SIZE=$BATCH_SIZE
-            export LR=$LR
-            export MODALITES=$MODALITES
-            bash ~/$TRAIN_SCRIPT 2>&1 | tee ~/train.log
-            echo \\\"\\\"
-            echo \\\"=========================================\\\"
-            echo \\\" ENTRAINEMENT TERMINE\\\"
-            echo \\\" Decodeur: ~/maestro_nemeton/$RESULT_DIR/$RESULT_FILE\\\"
-            echo \\\"=========================================\\\"
-        \"
-    '"
-else
-    ssh -o StrictHostKeyChecking=no "root@$PUBLIC_IP" bash -c "'
-        apt-get update -qq && apt-get install -y -qq tmux > /dev/null 2>&1
-        tmux new-session -d -s maestro \"
-            $NOTIFY_ENV
-            export BRANCH=$BRANCH
-            export EPOCHS=$EPOCHS
-            export BATCH_SIZE=$BATCH_SIZE
-            bash ~/$TRAIN_SCRIPT 2>&1 | tee ~/train.log
-            echo \\\"\\\"
-            echo \\\"=========================================\\\"
-            echo \\\" ENTRAINEMENT TERMINE\\\"
-            echo \\\" Modele: ~/maestro_nemeton/$RESULT_DIR/$RESULT_FILE\\\"
-            echo \\\"=========================================\\\"
-        \"
-    '"
-fi
+    # Lancer dans tmux (persistant meme si SSH deconnecte)
+    tmux new-session -d -s maestro "bash /root/run_train.sh"
+REMOTE_EOF
 
 log_ok "Entrainement lance en arriere-plan (tmux session: maestro)"
 
@@ -366,7 +374,7 @@ echo ""
 echo "--- Commandes utiles ---"
 echo ""
 echo "  # Suivre l'entrainement en temps reel :"
-echo "  ssh root@$PUBLIC_IP 'tmux attach -t maestro'"
+echo "  ssh -t root@$PUBLIC_IP 'tmux attach -t maestro'"
 echo ""
 echo "  # Voir les logs :"
 echo "  ssh root@$PUBLIC_IP 'tail -f ~/train.log'"
@@ -374,24 +382,15 @@ echo ""
 echo "  # Verifier la GPU :"
 echo "  ssh root@$PUBLIC_IP 'nvidia-smi'"
 echo ""
-echo "  # Recuperer le modele entraine :"
-echo "  scp root@$PUBLIC_IP:~/maestro_nemeton/$RESULT_DIR/$RESULT_FILE ."
+echo "  # Recuperer le modele entraine + le rapport :"
+echo "  scp root@$PUBLIC_IP:/data/outputs/training/maestro_pureforest_best.pt ."
+echo "  scp root@$PUBLIC_IP:/data/outputs/training/maestro_pureforest_best.report.json ."
 echo ""
-if $SEGMENTATION; then
-echo "  # Predire sur votre AOI (segmentation 0.2m) :"
-echo "  library(maestro)"
-echo "  maestro_segmentation_pipeline("
-echo "    aoi_path = 'data/aoi.gpkg',"
-echo "    backbone_path = 'MAESTRO_pretrain.ckpt',"
-echo "    decoder_path = '$RESULT_FILE'"
-echo "  )"
-else
 echo "  # Predire sur votre AOI (apres recuperation du modele) :"
 echo "  Rscript inst/scripts/predict_from_checkpoint.R \\"
 echo "      --aoi data/aoi.gpkg \\"
-echo "      --checkpoint $RESULT_FILE \\"
+echo "      --checkpoint maestro_pureforest_best.pt \\"
 echo "      --output outputs/"
-fi
 echo ""
 echo "  # IMPORTANT : Supprimer l'instance apres recuperation du modele !"
 echo "  scw instance server terminate $SERVER_ID zone=$ZONE with-ip=true"
