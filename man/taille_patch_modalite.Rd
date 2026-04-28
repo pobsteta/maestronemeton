@@ -4,22 +4,17 @@
 \alias{taille_patch_modalite}
 \title{Taille de patch par modalite MAESTRO}
 \usage{
-taille_patch_modalite(mod_name, taille_pixels_ref = 250L)
+taille_patch_modalite(mod_name, taille_pixels_ref = 256L)
 }
 \arguments{
 \item{mod_name}{Nom de la modalite}
 
-\item{taille_pixels_ref}{Taille de reference (defaut: 250 pour aerial)}
+\item{taille_pixels_ref}{Taille pour aerial/dem si mod_name n'est pas connue}
 }
 \value{
-Entier : nombre de pixels pour ce patch
+Entier : nombre de pixels du patch
 }
 \description{
-Retourne la taille de patch en pixels attendue par le modele MAESTRO
-pour chaque modalite, selon la resolution native :
-\itemize{
-\item aerial : 250 pixels (0.2m, 50m / 0.2m)
-\item dem    : 50 pixels  (1m, 50m / 1m)
-\item s2, s1 : 5 pixels   (10m, 50m / 10m)
-}
+Wrapper retro-compatible autour de \code{\link[=modalite_specs]{modalite_specs()}}. Pour de nouveaux
+developpements, preferer l'acces direct via \verb{modalite_specs()$<mod>$image_size}.
 }

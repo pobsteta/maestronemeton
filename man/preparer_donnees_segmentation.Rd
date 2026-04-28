@@ -50,6 +50,10 @@ preparer_donnees_segmentation(
 \item{saison}{Saison cible}
 
 \item{max_scenes_par_annee}{Nombre max de scenes par annee}
+
+\item{dem_channels}{Vecteur de noms de canaux DEM parmi
+\code{c("DSM", "DTM", "SLOPE", "ASPECT", "TPI", "TWI")}. Defaut :
+\code{c("SLOPE", "TWI")}.}
 }
 \value{
 Liste avec n_train, n_val, n_skipped

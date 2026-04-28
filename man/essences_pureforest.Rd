@@ -10,8 +10,9 @@ essences_pureforest()
 Un data.frame avec les colonnes code, classe, nom_latin et type
 }
 \description{
-Table des 13 classes d'essences forestieres du jeu de donnees PureForest,
-utilise pour l'entrainement du modele MAESTRO. Source : BD Foret V2 / IGN.
+Table des 13 classes d'essences forestieres du jeu de donnees PureForest
+(IGN), utilise pour l'entrainement du modele MAESTRO. Source officielle :
+fiche dataset Hugging Face \code{IGNF/PureForest}.
 }
 \examples{
 ess <- essences_pureforest()

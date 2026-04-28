@@ -2,7 +2,7 @@
 % Please edit documentation in R/terrain.R
 \name{assembler_dem_channels}
 \alias{assembler_dem_channels}
-\title{Assembler un DEM 2 bandes a partir des canaux choisis}
+\title{Assembler un DEM multi-bandes a partir des canaux choisis}
 \usage{
 assembler_dem_channels(dsm, dtm, derives, dem_channels)
 }
@@ -13,13 +13,14 @@ assembler_dem_channels(dsm, dtm, derives, dem_channels)
 
 \item{derives}{Liste de derives terrain (issue de \code{\link[=calculer_derives_terrain]{calculer_derives_terrain()}})}
 
-\item{dem_channels}{Vecteur de 2 noms de canaux parmi
+\item{dem_channels}{Vecteur de 1 a 6 noms de canaux parmi
 \code{c("DSM", "DTM", "SLOPE", "ASPECT", "TPI", "TWI")}}
 }
 \value{
-SpatRaster 2 bandes avec les canaux selectionnes
+SpatRaster avec les canaux selectionnes
 }
 \description{
-Selectionne 2 canaux parmi les sources disponibles (DSM, DTM, SLOPE,
-ASPECT, TPI, TWI) et les empile en un SpatRaster 2 bandes pour MAESTRO.
+Selectionne 1 a 6 canaux parmi les sources disponibles (DSM, DTM, SLOPE,
+ASPECT, TPI, TWI) et les empile en un SpatRaster. MAESTRO attend 2 bandes,
+FLAIR peut utiliser 1 a 2 bandes supplementaires.
 }

@@ -14,7 +14,7 @@ compute_gndvi(rgbi, nir_band = 4L, green_band = 2L)
 \item{green_band}{Indice de la bande Verte (defaut: 2)}
 }
 \value{
-SpatRaster mono-bande avec valeurs GNDVI \link{-1, 1}
+SpatRaster mono-bande avec valeurs GNDVI entre -1 et 1
 }
 \description{
 GNDVI = (PIR - Vert) / (PIR + Vert)

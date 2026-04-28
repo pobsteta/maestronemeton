@@ -4,12 +4,13 @@
 \alias{creer_grille_patches}
 \title{Creer une grille de patches pour l'inference}
 \usage{
-creer_grille_patches(aoi, taille_patch_m = 50)
+creer_grille_patches(aoi, taille_patch_m = 51.2)
 }
 \arguments{
 \item{aoi}{sf object en Lambert-93}
 
-\item{taille_patch_m}{Taille des patches en metres (defaut: 50)}
+\item{taille_patch_m}{Taille des patches en metres (defaut: 51.2 m,
+correspond a aerial 256 px @ 0,2 m)}
 }
 \value{
 sf data.frame (grille de patches avec colonne \code{id})
@@ -17,4 +18,8 @@ sf data.frame (grille de patches avec colonne \code{id})
 \description{
 Genere une grille reguliere de patches carres couvrant l'AOI.
 Seuls les patches qui intersectent l'AOI sont conserves.
+}
+\details{
+Le pas de la grille doit correspondre a la fenetre physique de la
+modalite de reference (typiquement \code{aerial}). Voir \code{\link[=modalite_specs]{modalite_specs()}}.
 }

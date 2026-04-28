@@ -14,7 +14,7 @@ compute_ndvi(rgbi, nir_band = 4L, red_band = 1L)
 \item{red_band}{Indice de la bande Rouge (defaut: 1 pour RGBI)}
 }
 \value{
-SpatRaster mono-bande avec valeurs NDVI \link{-1, 1}
+SpatRaster mono-bande avec valeurs NDVI entre -1 et 1
 }
 \description{
 Calcule le NDVI a partir d'un raster RGBI ou de bandes PIR et Rouge separees.

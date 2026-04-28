@@ -2,7 +2,7 @@
 % Please edit documentation in R/flair_classes.R
 \name{classes_cosia}
 \alias{classes_cosia}
-\title{Classes d'occupation du sol CoSIA (19 classes)}
+\title{Classes d'occupation du sol CoSIA (15 classes actives + non classifie)}
 \usage{
 classes_cosia()
 }
@@ -10,8 +10,12 @@ classes_cosia()
 Un data.frame avec les colonnes code, classe, couleur
 }
 \description{
-Table des 19 classes d'occupation du sol du jeu de donnees FLAIR-HUB,
-issue de la photo-interpretation experte CoSIA (IGN).
+Table des classes d'occupation du sol CoSIA apres remapping
+depuis les codes FLAIR-1. Les classes desactivees (coupe, mixte,
+ligneux, autre) sont remappees a 0 (non classifie).
+}
+\details{
+Compatible avec la sortie des modeles 19 classes apres remapping.
 }
 \examples{
 cls <- classes_cosia()

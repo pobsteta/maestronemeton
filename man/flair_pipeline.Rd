@@ -7,7 +7,7 @@
 flair_pipeline(
   aoi_path = "data/aoi.gpkg",
   output_dir = "outputs",
-  model_id = "IGNF/FLAIR-INC_RGBI_15cl",
+  model_id = "IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet",
   encoder = "resnet34",
   decoder = "unet",
   n_classes = 19L,
@@ -26,13 +26,14 @@ flair_pipeline(
 \item{output_dir}{Repertoire de sortie (defaut: \code{"outputs"})}
 
 \item{model_id}{Identifiant du modele Hugging Face
-(defaut: \code{"IGNF/FLAIR-INC_RGBI_15cl"})}
+(defaut: \code{"IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet"})}
 
 \item{encoder}{Architecture encodeur (defaut: \code{"resnet34"})}
 
 \item{decoder}{Architecture decodeur (defaut: \code{"unet"})}
 
-\item{n_classes}{Nombre de classes (defaut: 19 pour CoSIA)}
+\item{n_classes}{Nombre de classes du modele (defaut: 19, les checkpoints
+FLAIR-INC ont 19 canaux de sortie meme pour 15 classes actives)}
 
 \item{dem_channels}{Canaux DEM a ajouter. \code{NULL} = pas de DEM (RGBI seul, 4 bandes).
 Vecteur de noms parmi \code{c("DSM", "DTM", "SLOPE", "ASPECT", "TPI", "TWI")}.
@@ -72,11 +73,11 @@ flair_pipeline("data/aoi.gpkg")
 # Avec pente + TWI (6 bandes, optimal foret)
 flair_pipeline("data/aoi.gpkg",
                 dem_channels = c("SLOPE", "TWI"),
-                model_id = "IGNF/FLAIR-HUB_RGBI-DEM_19cl")
+                model_id = "IGNF/FLAIR-INC_rgbie_15cl_resnet34-unet")
 
 # Avec DTM classique (5 bandes)
 flair_pipeline("data/aoi.gpkg",
                 dem_channels = "DTM",
-                model_id = "IGNF/FLAIR-HUB_RGBI-DEM_19cl")
+                model_id = "IGNF/FLAIR-INC_rgbie_15cl_resnet34-unet")
 }
 }

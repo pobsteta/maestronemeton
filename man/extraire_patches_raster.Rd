@@ -2,21 +2,22 @@
 % Please edit documentation in R/patches.R
 \name{extraire_patches_raster}
 \alias{extraire_patches_raster}
-\title{Extraire les patches raster depuis un SpatRaster}
+\title{Extraire les patches d'un raster unique (mono-modal)}
 \usage{
-extraire_patches_raster(r, grille, taille_pixels = 250)
+extraire_patches_raster(r, grille, taille_pixels = 256L)
 }
 \arguments{
-\item{r}{SpatRaster multi-bandes}
+\item{r}{SpatRaster multi-bandes (typiquement RGBI 4 bandes)}
 
-\item{grille}{sf grille de patches (issue de \code{\link[=creer_grille_patches]{creer_grille_patches()}})}
+\item{grille}{sf grille de patches}
 
-\item{taille_pixels}{Taille cible de chaque patch en pixels (defaut: 250)}
+\item{taille_pixels}{Taille du patch en pixels (defaut: 256)}
 }
 \value{
-Liste de matrices (H*W x C), une par patch
+Liste de matrices (H*W, C)
 }
 \description{
-Decoupe un raster multi-bandes selon une grille de patches et
-retourne les valeurs sous forme de matrices pretes pour Python/NumPy.
+Variante mono-modale de \code{\link[=extraire_patches_multimodal]{extraire_patches_multimodal()}} : utilise
+uniquement la modalite \code{aerial}. Conservee pour les usages legers et
+les tests d'integration.
 }

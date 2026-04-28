@@ -2,25 +2,21 @@
 % Please edit documentation in R/pipeline.R
 \name{maestro_pipeline}
 \alias{maestro_pipeline}
-\title{Executer le pipeline complet de reconnaissance des essences forestieres}
+\title{Executer le pipeline MAESTRO de reconnaissance d'essences forestieres}
 \usage{
 maestro_pipeline(
   aoi_path = "data/aoi.gpkg",
   output_dir = "outputs",
   model_id = "IGNF/MAESTRO_FLAIR-HUB_base",
   checkpoint = NULL,
+  modalites = c("aerial"),
   millesime_ortho = NULL,
   millesime_irc = NULL,
-  patch_size = 250L,
-  resolution = 0.2,
-  n_classes = 7L,
-  use_s2 = FALSE,
-  use_s1 = FALSE,
+  n_classes = 13L,
   date_sentinel = NULL,
   annees_sentinel = NULL,
   saison = "ete",
   max_scenes_par_annee = 3L,
-  dem_channels = c("SLOPE", "TWI"),
   gpu = FALSE,
   token = NULL
 )
@@ -30,89 +26,84 @@ maestro_pipeline(
 
 \item{output_dir}{Repertoire de sortie (defaut: \code{"outputs"})}
 
-\item{model_id}{Identifiant du modele Hugging Face
-(defaut: \code{"IGNF/MAESTRO_FLAIR-HUB_base"})}
+\item{model_id}{Identifiant Hugging Face du modele de base
+(defaut: \code{"IGNF/MAESTRO_FLAIR-HUB_base"}). Ignore si \code{checkpoint} est
+fourni.}
 
-\item{checkpoint}{Chemin vers un modele fine-tune (.pt). Si fourni,
-utilise ce modele au lieu du pretrained MAESTRO. Le nombre de classes
-et les essences sont lus du checkpoint.
-Ex: \code{"outputs/training/maestro_treesatai_best.pt"}}
+\item{checkpoint}{Chemin vers un checkpoint fine-tune (\verb{*.pt}).
+Lorsque fourni, les modalites et le nombre de classes sont lus du
+checkpoint et imposes au pipeline. Ex.
+\code{"outputs/training/maestro_pureforest_best.pt"}.}
+
+\item{modalites}{Vecteur de modalites a utiliser parmi
+\code{c("aerial", "dem", "s2", "s1_asc", "s1_des")}
+(defaut: \code{"aerial"}, MVP phase 1).}
 
 \item{millesime_ortho}{Millesime de l'ortho RVB (\code{NULL} = plus recent)}
 
 \item{millesime_irc}{Millesime de l'ortho IRC (\code{NULL} = plus recent)}
 
-\item{patch_size}{Taille des patches en pixels (defaut: 250)}
+\item{n_classes}{Nombre de classes en sortie. Defaut 13 (PureForest).
+Ecrase par \code{checkpoint$n_classes} si un checkpoint fine-tune est
+fourni.}
 
-\item{resolution}{Resolution spatiale en metres (defaut: 0.2)}
-
-\item{use_s2}{Inclure Sentinel-2 (10 bandes) (defaut: FALSE)}
-
-\item{use_s1}{Inclure Sentinel-1 ascending + descending (defaut: FALSE)}
-
-\item{date_sentinel}{Date cible pour les images Sentinel (format "YYYY-MM-DD",
-NULL = ete de l'annee en cours). Ignore si \code{annees_sentinel} est fourni.}
+\item{date_sentinel}{Date cible pour Sentinel (\code{"YYYY-MM-DD"}, NULL =
+ete de l'annee courante). Ignore si \code{annees_sentinel} est fourni.}
 
 \item{annees_sentinel}{Vecteur d'annees pour un composite multi-annuel
-(ex: \code{2021:2024}). Telecharge plusieurs scenes par annee et calcule
-un composite median pixel par pixel, robuste aux nuages et a la secheresse.}
+(ex. \code{2021:2024}). Active le mode multitemporel.}
 
-\item{saison}{Saison cible pour le composite multitemporel : "ete" (defaut),
-"printemps", "automne", "annee", ou vecteur de 2 mois c(debut, fin)}
+\item{saison}{Saison du composite : \code{"ete"}, \code{"printemps"}, \code{"automne"},
+\code{"annee"}, ou vecteur \code{c(mois_debut, mois_fin)}.}
 
-\item{max_scenes_par_annee}{Nombre max de scenes a retenir par annee
-pour le composite (defaut: 3, les moins nuageuses)}
+\item{max_scenes_par_annee}{Nombre max de scenes par annee pour le
+composite (defaut : 3, les moins nuageuses).}
 
-\item{dem_channels}{Vecteur de 2 noms de canaux DEM parmi
-\code{c("DSM", "DTM", "SLOPE", "ASPECT", "TPI", "TWI")}.
-Defaut: \code{c("SLOPE", "TWI")}. Le DEM est conserve a 1m de resolution.}
+\item{gpu}{Utiliser le GPU CUDA (defaut: FALSE).}
 
-\item{gpu}{Utiliser le GPU CUDA (defaut: FALSE)}
-
-\item{token}{Token Hugging Face (optionnel)}
+\item{token}{Token Hugging Face (optionnel).}
 }
 \value{
-Liste invisible avec \code{grille} (sf) et \code{raster} (SpatRaster)
+Liste invisible avec \code{grille} (sf), \code{raster} (SpatRaster) et
+\code{modalites} (character) effectivement utilisees.
 }
 \description{
-Pipeline de bout en bout : charge l'AOI, telecharge les donnees IGN
-(ortho RVB, IRC, DEM), combine les bandes, telecharge le modele MAESTRO,
-decoupe en patches, execute l'inference multi-modale et exporte les resultats.
+Pipeline de bout en bout : charge l'AOI, telecharge les modalites
+demandees (aerien IGN, DEM, Sentinel-2, Sentinel-1), construit une
+grille de patches alignee sur la modalite aerienne, extrait les
+fenetres centrees par modalite (cf. \code{\link[=modalite_specs]{modalite_specs()}}) et execute
+l'inference multi-modale MAESTRO.
 }
 \details{
-Le modele MAESTRO supporte 6 modalites :
+Modalites supportees (cf. fiche modele HF \code{IGNF/MAESTRO_FLAIR-HUB_base}) :
 \itemize{
-\item aerial : RGBI 4 bandes (0.2m) — ortho IGN
-\item dem    : 2 bandes au choix (1m natif) parmi DSM, DTM, SLOPE, ASPECT, TPI, TWI
-\item s2     : Sentinel-2 L2A 10 bandes (10m)
-\item s1_asc : Sentinel-1 ascending VV+VH 2 bandes (10m)
-\item s1_des : Sentinel-1 descending VV+VH 2 bandes (10m)
-\item spot   : SPOT RGBI 3 bandes (1.6m) — non disponible via WMS
+\item \code{aerial} : RGBI 4 bandes a 0,2 m, fenetre 51,2 m (256 x 256 px,
+\code{patch_size.mae=16})
+\item \code{dem}    : DSM+DTM 2 bandes a 0,2 m, meme fenetre 51,2 m
+(\code{patch_size.mae=32})
+\item \code{s2}     : Sentinel-2 L2A 10 bandes a 10 m, fenetre 60 m (6 x 6 px,
+\code{patch_size.mae=2})
+\item \code{s1_asc} / \code{s1_des} : Sentinel-1 RTC VV+VH a 10 m, fenetre 60 m
 }
+
+Les modalites Sentinel utilisent une fenetre legerement elargie (60 m
+au lieu de 51,2 m) pour respecter le multiple de \code{patch_size.mae=2}.
 }
 \examples{
 \dontrun{
-# PureForest (13 classes, modele pretrained)
+# MVP : aerial seul, modele de base PureForest 13 classes
 maestro_pipeline("data/aoi.gpkg")
 
-# TreeSatAI (7 classes, modele fine-tune)
+# Aerial + DEM (Phase 2)
+maestro_pipeline("data/aoi.gpkg", modalites = c("aerial", "dem"))
+
+# Toutes les modalites avec composite Sentinel multi-annuel (Phase 3)
 maestro_pipeline("data/aoi.gpkg",
-                  checkpoint = "outputs/training/maestro_treesatai_best.pt")
-
-# DEM avec pente + TWI (defaut, optimal pour la foret)
-maestro_pipeline("data/aoi.gpkg", dem_channels = c("SLOPE", "TWI"))
-
-# DEM classique DSM + DTM
-maestro_pipeline("data/aoi.gpkg", dem_channels = c("DSM", "DTM"))
-
-# DEM avec TPI + orientation
-maestro_pipeline("data/aoi.gpkg", dem_channels = c("TPI", "ASPECT"))
-
-# Toutes les modalites : aerial + DEM + S2 + S1
-maestro_pipeline("data/aoi.gpkg", use_s2 = TRUE, use_s1 = TRUE)
-
-# Composite multi-annuel (3 etes, median pixel par pixel)
-maestro_pipeline("data/aoi.gpkg", use_s2 = TRUE, use_s1 = TRUE,
+                  modalites = c("aerial", "dem", "s2", "s1_asc", "s1_des"),
                   annees_sentinel = 2022:2024, saison = "ete")
+
+# Avec checkpoint fine-tune PureForest
+maestro_pipeline("data/aoi.gpkg",
+                  checkpoint = "outputs/training/maestro_pureforest_best.pt")
 }
 }

@@ -21,7 +21,9 @@ maestro_segmentation_pipeline(
   saison = "ete",
   max_scenes_par_annee = 3L,
   dem_channels = c("SLOPE", "TWI"),
-  gpu = FALSE
+  gpu = FALSE,
+  use_flair = FALSE,
+  model_flair = "IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet"
 )
 }
 \arguments{
@@ -58,6 +60,13 @@ maestro_segmentation_pipeline(
 \item{dem_channels}{Vecteur de 2 noms de canaux DEM (defaut: \code{c("SLOPE", "TWI")})}
 
 \item{gpu}{Utiliser le GPU CUDA (defaut: FALSE)}
+
+\item{use_flair}{Logical. Appliquer la contrainte FLAIR feuillus/resineux
+sur la segmentation ? (defaut: \code{FALSE}). Si \code{TRUE}, execute l'inference
+FLAIR puis corrige les pixels incoherents.}
+
+\item{model_flair}{Identifiant du modele FLAIR HuggingFace
+(defaut: \code{"IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet"}).}
 }
 \value{
 SpatRaster mono-bande avec les codes NDP0 a 0.2m

@@ -30,6 +30,10 @@ executer_inference_multimodal(
 \item{utiliser_gpu}{Utiliser le GPU CUDA (defaut: FALSE)}
 
 \item{batch_size}{Taille des batchs pour l'inference (defaut: 16)}
+
+\item{checkpoint}{Chemin vers un checkpoint fine-tune \verb{*.pt}/\verb{*.ckpt}/
+\verb{*.safetensors}. Si fourni, charge ce checkpoint plutot que le modele
+referencee par \code{fichiers_modele$weights}.}
 }
 \value{
 Liste de predictions (codes de classes 0-12)

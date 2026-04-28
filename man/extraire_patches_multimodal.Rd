@@ -4,29 +4,28 @@
 \alias{extraire_patches_multimodal}
 \title{Extraire les patches multi-modaux depuis plusieurs SpatRasters}
 \usage{
-extraire_patches_multimodal(modalites, grille, taille_pixels = 250)
+extraire_patches_multimodal(modalites, grille, specs = modalite_specs())
 }
 \arguments{
-\item{modalites}{Liste nommee de SpatRasters (ex: \code{list(aerial=..., dem=..., s2=...)})}
+\item{modalites}{Liste nommee de SpatRaster, ex.
+\code{list(aerial = ..., dem = ..., s2 = ...)}}
 
 \item{grille}{sf grille de patches (issue de \code{\link[=creer_grille_patches]{creer_grille_patches()}})}
 
-\item{taille_pixels}{Taille cible pour aerial/dem en pixels (defaut: 250)}
+\item{specs}{Specifications, defaut \code{\link[=modalite_specs]{modalite_specs()}}}
 }
 \value{
-Liste de listes nommees, chaque element contient les matrices
-(H*W x C) pour chaque modalite. Ex: \code{patches[[i]]$aerial}, \code{patches[[i]]$s2}
+Liste de listes nommees : \verb{patches[[i]]$<mod>} matrice (H*W, C)
 }
 \description{
-Pour chaque patch de la grille, extrait les valeurs de chaque modalite
-(aerial, dem, s2, s1_asc, s1_des) separement. Chaque modalite est
-reechantillonnee a sa taille de patch native :
-\itemize{
-\item aerial : 250 x 250 pixels (0.2m)
-\item dem    : 50 x 50 pixels   (1m)
-\item s2, s1_asc, s1_des : 5 x 5 pixels (10m)
-}
+Pour chaque cellule de la grille, extrait une fenetre \strong{centree} sur
+le centroide de la cellule, dimensionnee selon la specification de
+chaque modalite (cf. \code{\link[=modalite_specs]{modalite_specs()}}). Les fenetres Sentinel
+(60 m) depassent legerement la cellule aerienne (51,2 m) pour respecter
+la contrainte multiple de \code{patch_size.mae=2}.
 }
 \details{
-Les donnees sont structurees pour etre passees au modele MAESTRO.
+Le contrat de sortie est compatible avec
+\code{\link[=executer_inference_multimodal]{executer_inference_multimodal()}} : chaque modalite est une matrice
+(\code{H*W} lignes, \code{C} colonnes) au format produit par \code{terra::values()}.
 }

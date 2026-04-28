@@ -4,11 +4,14 @@
 \alias{telecharger_modele_flair}
 \title{Telecharger un modele FLAIR pre-entraine depuis HuggingFace}
 \usage{
-telecharger_modele_flair(model_id = "IGNF/FLAIR-INC_RGBI_15cl", token = NULL)
+telecharger_modele_flair(
+  model_id = "IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet",
+  token = NULL
+)
 }
 \arguments{
 \item{model_id}{Identifiant HuggingFace du modele
-(defaut: "IGNF/FLAIR-INC_RGBI_15cl")}
+(defaut: "IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet")}
 
 \item{token}{Token HuggingFace (optionnel)}
 }
