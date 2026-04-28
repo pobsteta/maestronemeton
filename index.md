@@ -1,0 +1,317 @@
+# maestronemeton - Reconnaissance des essences forestieres
+
+Package R pour la reconnaissance automatique des essences forestieres a
+partir d’une zone d’interet (`aoi.gpkg`) en utilisant le modele
+[MAESTRO](https://github.com/IGNF/maestro) de l’IGNF telecharge depuis
+[Hugging Face](https://huggingface.co/IGNF) via le package R
+[hfhub](https://cran.r-project.org/package=hfhub).
+
+Les donnees d’entree (orthophotos RVB, IRC et MNT 1m) sont telechargees
+automatiquement depuis la [Geoplateforme IGN](https://data.geopf.fr/)
+via le service WMS-R (pas de cle API necessaire).
+
+## Installation
+
+``` r
+# Depuis le depot Git
+devtools::install_github("pobsteta/maestronemeton")
+
+# Ou localement
+devtools::install(".")
+```
+
+### Dependances Python
+
+``` bash
+conda create -n maestro python=3.11 -y
+conda activate maestro
+pip install torch numpy safetensors
+```
+
+## Utilisation rapide
+
+### En tant que package R
+
+``` r
+library(maestronemeton)
+
+# Pipeline complet en une ligne
+maestro_pipeline("data/aoi.gpkg",
+                  millesime_ortho = 2023,
+                  millesime_irc = 2023)
+
+# Ou etape par etape (modalites separees)
+aoi   <- load_aoi("data/aoi.gpkg")
+ortho <- download_ortho_for_aoi(aoi, "outputs/", millesime_ortho = 2023)
+rgbi  <- combine_rvb_irc(ortho$rvb, ortho$irc)        # modalite aerial (4ch)
+dem   <- prepare_dem(aoi, "outputs/", rgbi = rgbi)    # modalite dem (DSM, DTM)
+# ... inference, export
+```
+
+### Composite multi-annuel (multitemporel)
+
+Pour gommer les annees seches et reduire l’impact des nuages, il est
+possible de calculer un **composite median** a partir de plusieurs
+annees et saisons :
+
+``` r
+# Composite median sur 3 etes (2022-2024)
+maestro_pipeline("data/aoi.gpkg",
+                  use_s2 = TRUE, use_s1 = TRUE,
+                  annees_sentinel = 2022:2024,
+                  saison = "ete")
+
+# Composite sur 5 annees completes
+maestro_pipeline("data/aoi.gpkg",
+                  use_s2 = TRUE, use_s1 = TRUE,
+                  annees_sentinel = 2020:2024,
+                  saison = "annee",
+                  max_scenes_par_annee = 5)
+
+# Saisons disponibles : "ete", "printemps", "automne", "annee"
+# Ou mois personnalises : saison = c(4, 8) pour avril-aout
+```
+
+Le composite median est calcule pixel par pixel pour chaque bande. La
+mediane est robuste aux valeurs aberrantes (nuages residuels, secheresse
+ponctuelle, anomalies radiometriques).
+
+### En ligne de commande
+
+``` bash
+Rscript inst/scripts/maestro_cli.R --aoi data/aoi.gpkg
+Rscript inst/scripts/maestro_cli.R --aoi data/aoi.gpkg \
+  --millesime_ortho 2023 --millesime_irc 2023 --gpu
+
+# Composite multi-annuel
+Rscript inst/scripts/maestro_cli.R --aoi data/aoi.gpkg \
+  --s2 --s1 --annees "2022:2024" --saison ete
+
+# Avec annees specifiques
+Rscript inst/scripts/maestro_cli.R --aoi data/aoi.gpkg \
+  --s2 --s1 --annees "2021,2023,2024" --saison annee --max_scenes 5
+```
+
+### Test du pipeline (sans modele)
+
+``` bash
+# Test complet (500m x 500m, Fontainebleau)
+Rscript inst/scripts/test_pipeline.R
+
+# Avec millesime
+Rscript inst/scripts/test_pipeline.R --millesime 2023
+```
+
+## Pipeline
+
+    data/aoi.gpkg
+       |
+       v
+    Telechargement IGN (WMS-R Geoplateforme)
+       |-- Ortho RVB (0.2m, millesime au choix)
+       |-- Ortho IRC (0.2m, millesime au choix)
+       |-- DEM : DSM + DTM (1m, reechantillonne a 0.2m)
+       |
+       v
+    Combinaison -> RGBI 4 bandes (R, G, B, NIR)
+       |
+       v
+    [Optionnel] Telechargement Sentinel (STAC Planetary Computer)
+       |-- S2 L2A : 10 bandes spectrales (10m)
+       |-- S1 RTC : VV + VH ascending + descending (10m)
+       |-- Mode multitemporel : composite median multi-annuel
+       |
+       v
+    Decoupage en patches 250x250 px (50m x 50m)
+       |
+       v
+    Inference MAESTRO multi-modal (ViT/MAE, 13 classes PureForest)
+       |
+       v
+    outputs/
+       |-- essences_forestieres.gpkg (carte vectorielle)
+       |-- essences_forestieres.tif  (carte raster)
+       |-- statistiques_essences.csv
+
+## Structure du package
+
+    maestronemeton/
+      DESCRIPTION
+      NAMESPACE
+      LICENSE
+      data/                   # Placer aoi.gpkg ici
+      R/
+        aoi.R            # load_aoi()
+        combine.R        # combine_rvb_irc(), aligner_dem_sur_rgbi()
+        download_ign.R   # download_ortho_for_aoi(), prepare_dem(), ...
+        essences.R       # essences_pureforest()
+        export.R         # assembler_resultats(), creer_carte_raster()
+        inference.R      # configurer_python(), executer_inference()
+        model.R          # telecharger_modele(), find_checkpoint_name()
+        patches.R        # creer_grille_patches(), extraire_patches_raster()
+        pipeline.R       # maestro_pipeline()
+        zzz.R            # Configuration interne
+      inst/
+        python/
+          maestro_inference.py    # Module PyTorch (ViT/MAE)
+        scripts/
+          maestro_cli.R           # Interface ligne de commande
+          test_pipeline.R         # Script de test
+      man/                        # Documentation (generee par roxygen2)
+
+## Fonctions exportees
+
+| Fonction                                                                                                          | Description                                                    |
+|-------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------|
+| [`maestro_pipeline()`](https://pobsteta.github.io/maestronemeton/reference/maestro_pipeline.md)                   | Pipeline complet AOI -\> carte des essences                    |
+| [`load_aoi()`](https://pobsteta.github.io/maestronemeton/reference/load_aoi.md)                                   | Charger un GeoPackage et reprojeter en Lambert-93              |
+| [`download_ortho_for_aoi()`](https://pobsteta.github.io/maestronemeton/reference/download_ortho_for_aoi.md)       | Telecharger ortho RVB + IRC depuis IGN                         |
+| [`prepare_dem()`](https://pobsteta.github.io/maestronemeton/reference/prepare_dem.md)                             | Preparer la modalite dem MAESTRO (DSM LiDAR HD + DTM RGE ALTI) |
+| [`combine_rvb_irc()`](https://pobsteta.github.io/maestronemeton/reference/combine_rvb_irc.md)                     | Combiner RVB + IRC en image 4 bandes RGBI (modalite aerial)    |
+| [`aligner_dem_sur_rgbi()`](https://pobsteta.github.io/maestronemeton/reference/aligner_dem_sur_rgbi.md)           | Reechantillonner le DEM 2 bandes sur la grille aerial          |
+| [`telecharger_modele()`](https://pobsteta.github.io/maestronemeton/reference/telecharger_modele.md)               | Telecharger le modele depuis Hugging Face                      |
+| [`configurer_python()`](https://pobsteta.github.io/maestronemeton/reference/configurer_python.md)                 | Configurer l’environnement Python                              |
+| [`creer_grille_patches()`](https://pobsteta.github.io/maestronemeton/reference/creer_grille_patches.md)           | Creer la grille de patches pour l’inference                    |
+| [`extraire_patches_raster()`](https://pobsteta.github.io/maestronemeton/reference/extraire_patches_raster.md)     | Extraire les valeurs des patches                               |
+| [`executer_inference()`](https://pobsteta.github.io/maestronemeton/reference/executer_inference.md)               | Executer l’inference MAESTRO                                   |
+| [`assembler_resultats()`](https://pobsteta.github.io/maestronemeton/reference/assembler_resultats.md)             | Exporter les resultats en GeoPackage + CSV                     |
+| [`creer_carte_raster()`](https://pobsteta.github.io/maestronemeton/reference/creer_carte_raster.md)               | Creer le raster de classification                              |
+| [`essences_pureforest()`](https://pobsteta.github.io/maestronemeton/reference/essences_pureforest.md)             | Table des 13 classes PureForest                                |
+| [`download_s2_for_aoi()`](https://pobsteta.github.io/maestronemeton/reference/download_s2_for_aoi.md)             | Telecharger Sentinel-2 (mono-date ou composite)                |
+| [`download_s1_for_aoi()`](https://pobsteta.github.io/maestronemeton/reference/download_s1_for_aoi.md)             | Telecharger Sentinel-1 (mono-date ou composite)                |
+| [`build_date_ranges()`](https://pobsteta.github.io/maestronemeton/reference/build_date_ranges.md)                 | Construire les periodes multi-annuelles                        |
+| [`calculer_composite_median()`](https://pobsteta.github.io/maestronemeton/reference/calculer_composite_median.md) | Composite median pixel par pixel                               |
+| [`aligner_sentinel()`](https://pobsteta.github.io/maestronemeton/reference/aligner_sentinel.md)                   | Aligner un raster Sentinel sur la grille                       |
+| [`ign_layer_name()`](https://pobsteta.github.io/maestronemeton/reference/ign_layer_name.md)                       | Construire un nom de couche WMS IGN                            |
+| [`validate_wms_data()`](https://pobsteta.github.io/maestronemeton/reference/validate_wms_data.md)                 | Verifier la validite d’un raster WMS                           |
+
+## Options CLI
+
+| Option              | Description                        | Defaut                        |
+|---------------------|------------------------------------|-------------------------------|
+| `--aoi`             | Fichier GeoPackage                 | `data/aoi.gpkg`               |
+| `--output`          | Repertoire de sortie               | `outputs/`                    |
+| `--model`           | Modele Hugging Face                | `IGNF/MAESTRO_FLAIR-HUB_base` |
+| `--millesime_ortho` | Annee ortho RVB                    | `NULL` (plus recent)          |
+| `--millesime_irc`   | Annee ortho IRC                    | `NULL` (plus recent)          |
+| `--patch_size`      | Taille patches (px)                | `250`                         |
+| `--resolution`      | Resolution (m)                     | `0.2`                         |
+| `--s2`              | Inclure Sentinel-2                 | `FALSE`                       |
+| `--s1`              | Inclure Sentinel-1                 | `FALSE`                       |
+| `--date_sentinel`   | Date cible Sentinel                | `NULL` (ete)                  |
+| `--annees`          | Annees composite (ex: `2022:2024`) | `NULL` (mono-date)            |
+| `--saison`          | Saison composite                   | `ete`                         |
+| `--max_scenes`      | Max scenes/annee composite         | `3`                           |
+| `--gpu`             | Utiliser CUDA                      | `FALSE`                       |
+| `--token`           | Token Hugging Face                 | *(env var)*                   |
+
+## Essences detectees (13 classes PureForest)
+
+Source : fiche dataset Hugging Face `IGNF/PureForest`.
+
+| Code | Essence       | Nom latin                                 | Type     |
+|------|---------------|-------------------------------------------|----------|
+| 0    | Chene decidu  | *Quercus robur, Q. petraea, Q. pubescens* | Feuillu  |
+| 1    | Chene vert    | *Quercus ilex*                            | Feuillu  |
+| 2    | Hetre         | *Fagus sylvatica*                         | Feuillu  |
+| 3    | Chataignier   | *Castanea sativa*                         | Feuillu  |
+| 4    | Robinier      | *Robinia pseudoacacia*                    | Feuillu  |
+| 5    | Pin maritime  | *Pinus pinaster*                          | Resineux |
+| 6    | Pin sylvestre | *Pinus sylvestris*                        | Resineux |
+| 7    | Pin noir      | *Pinus nigra*                             | Resineux |
+| 8    | Pin d’Alep    | *Pinus halepensis*                        | Resineux |
+| 9    | Sapin         | *Abies alba*                              | Resineux |
+| 10   | Epicea        | *Picea abies*                             | Resineux |
+| 11   | Meleze        | *Larix decidua, L. kaempferi*             | Resineux |
+| 12   | Douglas       | *Pseudotsuga menziesii*                   | Resineux |
+
+## Donnees IGN
+
+Les donnees sont telechargees via le WMS-R de la Geoplateforme IGN :
+
+| Donnee    | Couche WMS                                | Resolution |
+|-----------|-------------------------------------------|------------|
+| Ortho RVB | `ORTHOIMAGERY.ORTHOPHOTOS[YYYY]`          | 0.2 m      |
+| Ortho IRC | `ORTHOIMAGERY.ORTHOPHOTOS.IRC[.YYYY]`     | 0.2 m      |
+| MNT       | `ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES` | 1 m        |
+
+- **Pas de cle API** necessaire
+- Fallback automatique vers la mosaique la plus recente si le millesime
+  n’est pas disponible
+- Cache des fichiers telecharges dans le repertoire de sortie
+- Tuilage automatique pour les grandes emprises (4096 px max par
+  requete)
+
+Code de telechargement adapte de
+[pobsteta/flair_hub_nemeton](https://github.com/pobsteta/flair_hub_nemeton).
+
+## Entrainement GPU sur Scaleway
+
+Le package inclut des scripts pour fine-tuner MAESTRO sur une instance
+GPU Scaleway (cible : PureForest 13 classes, cf. `DEV_PLAN.md`). Les
+scripts historiques TreeSatAI (8 classes regroupees) sont archives sous
+`inst/legacy/`.
+
+### Deploiement depuis Windows (PowerShell)
+
+``` powershell
+# Pre-requis : CLI Scaleway (scw init) + OpenSSH + Git
+
+# Test a blanc (voir les commandes sans executer)
+.\inst\scripts\deploy_scaleway.ps1 -DryRun
+
+# Aerial seul, defauts (L4-1-24G, batch 24, probe 10 + finetune 50)
+.\inst\scripts\deploy_scaleway.ps1
+
+# Aerial + DEM (active prepare_pureforest_dem.py + LAZ download)
+.\inst\scripts\deploy_scaleway.ps1 -Modalities "aerial,dem"
+
+# Avec notification email/webhook
+.\inst\scripts\deploy_scaleway.ps1 -Modalities "aerial,dem" `
+    -NotifyEmail mon@email.fr -NotifyWebhook https://ntfy.sh/maestro-train
+
+# Recuperer le modele entraine + le rapport
+.\inst\scripts\recover_model.ps1
+
+# Ou avec l'IP directement
+.\inst\scripts\recover_model.ps1 -IP 51.15.x.x
+```
+
+### Deploiement depuis Linux/macOS (Bash)
+
+``` bash
+# Test a blanc
+bash inst/scripts/deploy_scaleway.sh --dry-run
+
+# Aerial seul (defauts)
+bash inst/scripts/deploy_scaleway.sh
+
+# Aerial + DEM
+bash inst/scripts/deploy_scaleway.sh --modalities aerial,dem
+
+# Recuperer le modele
+bash inst/scripts/recover_model.sh
+```
+
+### Prediction apres entrainement
+
+Le checkpoint produit par `cloud_train_pureforest.sh` est sauvegarde
+sous `outputs/training/maestro_pureforest_best.pt` (13 classes).
+
+``` bash
+Rscript inst/scripts/predict_from_checkpoint.R \
+    --aoi data/aoi.gpkg \
+    --checkpoint outputs/training/maestro_pureforest_best.pt
+```
+
+## References
+
+- **MAESTRO** : *MAESTRO: Masked AutoEncoders for Multimodal,
+  Multitemporal, and Multispectral Earth Observation Data*
+- **PureForest** : *A Large-Scale Aerial Lidar and Aerial Imagery
+  Dataset for Tree Species Classification*
+- **IGNF sur Hugging Face** :
+  [huggingface.co/IGNF](https://huggingface.co/IGNF)
+- **hfhub** :
+  [cran.r-project.org/package=hfhub](https://cran.r-project.org/package=hfhub)
+- **Geoplateforme IGN** : [data.geopf.fr](https://data.geopf.fr/)

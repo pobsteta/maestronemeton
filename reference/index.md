@@ -1,0 +1,237 @@
+# Package index
+
+## Pipelines de bout en bout
+
+Fonctions haut-niveau qui enchainent telechargement, extraction de
+patches, inference et export.
+
+- [`maestro_pipeline()`](https://pobsteta.github.io/maestronemeton/reference/maestro_pipeline.md)
+  : Executer le pipeline MAESTRO de reconnaissance d'essences
+  forestieres
+- [`maestro_segmentation_pipeline()`](https://pobsteta.github.io/maestronemeton/reference/maestro_segmentation_pipeline.md)
+  : Pipeline de segmentation dense MAESTRO a 0.2m
+- [`flair_pipeline()`](https://pobsteta.github.io/maestronemeton/reference/flair_pipeline.md)
+  : Executer le pipeline FLAIR d'occupation du sol
+- [`pipeline_flair_contrainte()`](https://pobsteta.github.io/maestronemeton/reference/pipeline_flair_contrainte.md)
+  : Lancer FLAIR puis contraindre la segmentation MAESTRO
+- [`preparer_donnees_segmentation()`](https://pobsteta.github.io/maestronemeton/reference/preparer_donnees_segmentation.md)
+  : Pipeline de preparation des donnees d'entrainement pour la
+  segmentation
+
+## Modalites et patches
+
+Specifications, grilles et extraction de patches multi-modaux.
+
+- [`modalite_specs()`](https://pobsteta.github.io/maestronemeton/reference/modalite_specs.md)
+  : Specifications des modalites MAESTRO
+- [`taille_patch_modalite()`](https://pobsteta.github.io/maestronemeton/reference/taille_patch_modalite.md)
+  : Taille de patch par modalite MAESTRO
+- [`creer_grille_patches()`](https://pobsteta.github.io/maestronemeton/reference/creer_grille_patches.md)
+  : Creer une grille de patches pour l'inference
+- [`extraire_patches_multimodal()`](https://pobsteta.github.io/maestronemeton/reference/extraire_patches_multimodal.md)
+  : Extraire les patches multi-modaux depuis plusieurs SpatRasters
+- [`extraire_patches_raster()`](https://pobsteta.github.io/maestronemeton/reference/extraire_patches_raster.md)
+  : Extraire les patches d'un raster unique (mono-modal)
+- [`creer_patches_inference()`](https://pobsteta.github.io/maestronemeton/reference/creer_patches_inference.md)
+  : Creer des patches d'inference avec overlap
+
+## Telechargement IGN
+
+Orthophotos RGB/IRC, MNT/MNS via la Geoplateforme IGN (WMS-R).
+
+- [`load_aoi()`](https://pobsteta.github.io/maestronemeton/reference/load_aoi.md)
+  : Charger une zone d'interet depuis un GeoPackage
+
+- [`download_ortho_for_aoi()`](https://pobsteta.github.io/maestronemeton/reference/download_ortho_for_aoi.md)
+  : Telecharger les ortho RVB et IRC pour une AOI
+
+- [`download_dem_for_aoi()`](https://pobsteta.github.io/maestronemeton/reference/download_dem_for_aoi.md)
+  : Telecharger le DEM 2 bandes pour une AOI avec derives terrain
+
+- [`prepare_dem()`](https://pobsteta.github.io/maestronemeton/reference/prepare_dem.md)
+  :
+
+  Preparer la modalite `dem` MAESTRO pour une AOI (DSM + DTM)
+
+- [`download_mnt_for_aoi()`](https://pobsteta.github.io/maestronemeton/reference/download_mnt_for_aoi.md)
+  : Telecharger le MNT (RGE ALTI 1m) pour une AOI
+
+- [`download_ign_tiled()`](https://pobsteta.github.io/maestronemeton/reference/download_ign_tiled.md)
+  : Telecharger une couche WMS IGN avec tuilage automatique
+
+- [`download_wms_tile()`](https://pobsteta.github.io/maestronemeton/reference/download_wms_tile.md)
+  : Telecharger une tuile WMS IGN
+
+- [`validate_wms_data()`](https://pobsteta.github.io/maestronemeton/reference/validate_wms_data.md)
+  : Verifier qu'un raster WMS contient des donnees reelles
+
+- [`ign_layer_name()`](https://pobsteta.github.io/maestronemeton/reference/ign_layer_name.md)
+  : Construire le nom de couche WMS IGN selon le millesime
+
+- [`combine_rvb_irc()`](https://pobsteta.github.io/maestronemeton/reference/combine_rvb_irc.md)
+  : Combiner les ortho RVB et IRC en image 4 bandes RGBI
+
+- [`aligner_dem_sur_rgbi()`](https://pobsteta.github.io/maestronemeton/reference/aligner_dem_sur_rgbi.md)
+  : Aligner le DEM 2 bandes (DSM+DTM) sur la grille RGBI
+
+- [`assembler_dem_channels()`](https://pobsteta.github.io/maestronemeton/reference/assembler_dem_channels.md)
+  : Assembler un DEM multi-bandes a partir des canaux choisis
+
+- [`calculer_derives_terrain()`](https://pobsteta.github.io/maestronemeton/reference/calculer_derives_terrain.md)
+  : Calculer les derives morphologiques du MNT
+
+## Sentinel-1 / Sentinel-2 (STAC)
+
+Recherche STAC + composites multi-temporels.
+
+- [`search_s2_stac()`](https://pobsteta.github.io/maestronemeton/reference/search_s2_stac.md)
+  : Rechercher des scenes Sentinel-2 via STAC (Planetary Computer)
+- [`search_s1_stac()`](https://pobsteta.github.io/maestronemeton/reference/search_s1_stac.md)
+  : Rechercher des scenes Sentinel-1 via STAC (Planetary Computer)
+- [`download_s2_for_aoi()`](https://pobsteta.github.io/maestronemeton/reference/download_s2_for_aoi.md)
+  : Telecharger une image Sentinel-2 pour une AOI
+- [`download_s1_for_aoi()`](https://pobsteta.github.io/maestronemeton/reference/download_s1_for_aoi.md)
+  : Telecharger les donnees Sentinel-1 pour une AOI
+- [`aligner_sentinel()`](https://pobsteta.github.io/maestronemeton/reference/aligner_sentinel.md)
+  : Aligner un raster Sentinel sur la grille de l'AOI
+- [`calculer_composite_median()`](https://pobsteta.github.io/maestronemeton/reference/calculer_composite_median.md)
+  : Calculer un composite median a partir de plusieurs rasters
+- [`build_date_ranges()`](https://pobsteta.github.io/maestronemeton/reference/build_date_ranges.md)
+  : Construire les periodes de recherche multi-annuelles
+- [`s2_bands_config()`](https://pobsteta.github.io/maestronemeton/reference/s2_bands_config.md)
+  : Configuration des bandes Sentinel-2
+
+## Modeles MAESTRO (Hugging Face)
+
+Telechargement et inference du modele de classification par patch.
+
+- [`telecharger_modele()`](https://pobsteta.github.io/maestronemeton/reference/telecharger_modele.md)
+  : Telecharger le modele MAESTRO depuis Hugging Face
+- [`executer_inference()`](https://pobsteta.github.io/maestronemeton/reference/executer_inference.md)
+  : Executer l'inference MAESTRO sur des patches (single-modal, legacy)
+- [`executer_inference_multimodal()`](https://pobsteta.github.io/maestronemeton/reference/executer_inference_multimodal.md)
+  : Executer l'inference MAESTRO multi-modale sur des patches
+- [`find_checkpoint_name()`](https://pobsteta.github.io/maestronemeton/reference/find_checkpoint_name.md)
+  : Trouver le nom du fichier checkpoint dans un depot Hugging Face
+- [`python_module_path()`](https://pobsteta.github.io/maestronemeton/reference/python_module_path.md)
+  : Chemin vers le module Python d'inference MAESTRO
+- [`configurer_python()`](https://pobsteta.github.io/maestronemeton/reference/configurer_python.md)
+  : Configurer l'environnement Python pour MAESTRO
+- [`CONDA_ENV`](https://pobsteta.github.io/maestronemeton/reference/CONDA_ENV.md)
+  : Nom de l'environnement conda pour MAESTRO
+
+## Modeles FLAIR (segmentation pixel)
+
+Modeles UNet/UPerNet d’occupation du sol.
+
+- [`charger_modele_flair()`](https://pobsteta.github.io/maestronemeton/reference/charger_modele_flair.md)
+  : Charger un modele FLAIR pour la segmentation
+- [`telecharger_modele_flair()`](https://pobsteta.github.io/maestronemeton/reference/telecharger_modele_flair.md)
+  : Telecharger un modele FLAIR pre-entraine depuis HuggingFace
+- [`executer_inference_flair()`](https://pobsteta.github.io/maestronemeton/reference/executer_inference_flair.md)
+  : Executer l'inference FLAIR avec blending Hann
+- [`flair_models()`](https://pobsteta.github.io/maestronemeton/reference/flair_models.md)
+  : Modeles FLAIR-HUB pre-entraines disponibles
+- [`flair_python_module_path()`](https://pobsteta.github.io/maestronemeton/reference/flair_python_module_path.md)
+  : Chemin vers le module Python d'inference FLAIR
+- [`assembler_resultats_flair()`](https://pobsteta.github.io/maestronemeton/reference/assembler_resultats_flair.md)
+  : Assembler les resultats FLAIR en GeoPackage et statistiques
+- [`contraindre_par_flair()`](https://pobsteta.github.io/maestronemeton/reference/contraindre_par_flair.md)
+  : Contraindre la segmentation MAESTRO par la classification FLAIR
+
+## Segmentation dense MAESTRO (NDP0)
+
+Decodeur de segmentation a 0,2 m, 10 classes NDP0.
+
+- [`charger_segmenter()`](https://pobsteta.github.io/maestronemeton/reference/charger_segmenter.md)
+  : Charger le decodeur de segmentation MAESTRO
+- [`executer_segmentation()`](https://pobsteta.github.io/maestronemeton/reference/executer_segmentation.md)
+  : Executer la segmentation dense MAESTRO sur toute l'AOI
+- [`preparer_patches_entrainement()`](https://pobsteta.github.io/maestronemeton/reference/preparer_patches_entrainement.md)
+  : Preparer les patches d'entrainement pour le decodeur de segmentation
+- [`preparer_labels_ndp0()`](https://pobsteta.github.io/maestronemeton/reference/preparer_labels_ndp0.md)
+  : Telecharger et rasteriser la BD Foret V2 pour une AOI
+- [`rasteriser_bdforet()`](https://pobsteta.github.io/maestronemeton/reference/rasteriser_bdforet.md)
+  : Rasteriser la BD Foret V2 en masque de classes NDP0
+- [`download_bdforet_for_aoi()`](https://pobsteta.github.io/maestronemeton/reference/download_bdforet_for_aoi.md)
+  : Telecharger la BD Foret V2 pour une AOI
+- [`mapping_tfv_ndp0()`](https://pobsteta.github.io/maestronemeton/reference/mapping_tfv_ndp0.md)
+  : Mapping des codes TFV vers les classes NDP0
+- [`tfv_to_ndp0()`](https://pobsteta.github.io/maestronemeton/reference/tfv_to_ndp0.md)
+  : Convertir un code TFV en classe NDP0
+- [`classes_ndp0()`](https://pobsteta.github.io/maestronemeton/reference/classes_ndp0.md)
+  : Classes de segmentation NDP0 (10 classes)
+- [`labelliser_flair_bdforet()`](https://pobsteta.github.io/maestronemeton/reference/labelliser_flair_bdforet.md)
+  : Labelliser les patches FLAIR-HUB avec la BD Foret V2
+
+## Dataset FLAIR-HUB (Hugging Face)
+
+Telechargement et inspection du dataset multimodal FLAIR-HUB.
+
+- [`download_flair_subset()`](https://pobsteta.github.io/maestronemeton/reference/download_flair_subset.md)
+  : Telecharger un sous-ensemble du dataset FLAIR-HUB
+- [`download_flair_toy()`](https://pobsteta.github.io/maestronemeton/reference/download_flair_toy.md)
+  : Telecharger le toy dataset FLAIR-HUB
+- [`download_flair_segmentation()`](https://pobsteta.github.io/maestronemeton/reference/download_flair_segmentation.md)
+  : Telecharger les domaines FLAIR-HUB recommandes pour la segmentation
+- [`lister_domaines_flair()`](https://pobsteta.github.io/maestronemeton/reference/lister_domaines_flair.md)
+  : Lister les domaines FLAIR-HUB disponibles
+- [`domaines_recommandes_segmentation()`](https://pobsteta.github.io/maestronemeton/reference/domaines_recommandes_segmentation.md)
+  : Domaines FLAIR-HUB recommandes pour l'entrainement segmentation
+- [`load_flair_patch()`](https://pobsteta.github.io/maestronemeton/reference/load_flair_patch.md)
+  : Charger un patch FLAIR-HUB depuis un fichier GeoTIFF
+- [`scan_flair_files()`](https://pobsteta.github.io/maestronemeton/reference/scan_flair_files.md)
+  : Scanner les fichiers FLAIR-HUB disponibles localement
+- [`preparer_flair_segmentation()`](https://pobsteta.github.io/maestronemeton/reference/preparer_flair_segmentation.md)
+  : Preparer les patches FLAIR-HUB pour l'entrainement du decodeur
+- [`hf_list_files()`](https://pobsteta.github.io/maestronemeton/reference/hf_list_files.md)
+  : Lister les fichiers d'un dataset HuggingFace
+- [`hf_download_file()`](https://pobsteta.github.io/maestronemeton/reference/hf_download_file.md)
+  : Telecharger un fichier depuis un dataset HuggingFace
+
+## Indices spectraux
+
+- [`compute_ndvi()`](https://pobsteta.github.io/maestronemeton/reference/compute_ndvi.md)
+  : Calculer le NDVI (Normalized Difference Vegetation Index)
+- [`compute_gndvi()`](https://pobsteta.github.io/maestronemeton/reference/compute_gndvi.md)
+  : Calculer le GNDVI (Green Normalized Difference Vegetation Index)
+- [`compute_savi()`](https://pobsteta.github.io/maestronemeton/reference/compute_savi.md)
+  : Calculer le SAVI (Soil Adjusted Vegetation Index)
+- [`mask_vegetation()`](https://pobsteta.github.io/maestronemeton/reference/mask_vegetation.md)
+  : Creer un masque de vegetation par seuillage NDVI
+
+## Tables d’essences et de classes
+
+- [`essences_pureforest()`](https://pobsteta.github.io/maestronemeton/reference/essences_pureforest.md)
+  : Classes d'essences forestieres PureForest
+- [`classes_cosia()`](https://pobsteta.github.io/maestronemeton/reference/classes_cosia.md)
+  : Classes d'occupation du sol CoSIA (15 classes actives + non
+  classifie)
+- [`classes_cosia_15()`](https://pobsteta.github.io/maestronemeton/reference/classes_cosia_15.md)
+  : Classes CoSIA pour modeles FLAIR-INC 15 classes
+- [`classes_lpis()`](https://pobsteta.github.io/maestronemeton/reference/classes_lpis.md)
+  : Classes de cultures LPIS/RPG (23 classes)
+- [`classes_ndp0()`](https://pobsteta.github.io/maestronemeton/reference/classes_ndp0.md)
+  : Classes de segmentation NDP0 (10 classes)
+
+## Assemblage et exports
+
+- [`assembler_resultats()`](https://pobsteta.github.io/maestronemeton/reference/assembler_resultats.md)
+  : Assembler les predictions dans un GeoPackage
+- [`creer_carte_raster()`](https://pobsteta.github.io/maestronemeton/reference/creer_carte_raster.md)
+  : Creer le raster de classification des essences
+- [`export_raster()`](https://pobsteta.github.io/maestronemeton/reference/export_raster.md)
+  : Exporter un raster de classification
+- [`generer_rapport()`](https://pobsteta.github.io/maestronemeton/reference/generer_rapport.md)
+  : Generer un rapport HTML ou PDF du pipeline MAESTRO
+- [`generer_rapport_segmentation()`](https://pobsteta.github.io/maestronemeton/reference/generer_rapport_segmentation.md)
+  : Generer un rapport de segmentation MAESTRO (HTML ou PDF)
+
+## Evaluation
+
+- [`evaluer_predictions()`](https://pobsteta.github.io/maestronemeton/reference/evaluer_predictions.md)
+  : Evaluer les predictions par rapport a une reference
+- [`compute_landcover_stats()`](https://pobsteta.github.io/maestronemeton/reference/compute_landcover_stats.md)
+  : Calculer les statistiques d'occupation du sol
+- [`cross_landcover_dem()`](https://pobsteta.github.io/maestronemeton/reference/cross_landcover_dem.md)
+  : Correler l'occupation du sol avec le DEM
