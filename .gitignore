@@ -5,7 +5,7 @@
 .Rhistory
 .RData
 .Ruserdata
-.Rproj
+*.Rproj
 
 # Secrets (token HF)
 .Renviron
