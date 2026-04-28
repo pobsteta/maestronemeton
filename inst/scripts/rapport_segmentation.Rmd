@@ -1,7 +1,7 @@
 ---
 title: "Rapport de Segmentation MAESTRO"
 subtitle: "Carte forestiere dense a 0.2m (NDP0)"
-author: "Package maestro"
+author: "Package maestronemeton"
 date: "`r format(Sys.time(), '%d %B %Y - %H:%M')`"
 output:
   html_document:
@@ -52,7 +52,7 @@ knitr::opts_chunk$set(
   fig.align = "center",
   out.width = "100%"
 )
-library(maestro)
+library(maestronemeton)
 library(sf)
 library(terra)
 library(fs)

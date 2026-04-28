@@ -8,7 +8,7 @@
 #   - conda env maestro avec torch, numpy, safetensors, tifffile, Pillow
 # =============================================================================
 
-library(maestro)
+library(maestronemeton)
 
 # --- Parametres ---
 aoi_path   <- "data/aoi.gpkg"

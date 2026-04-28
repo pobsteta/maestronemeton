@@ -144,7 +144,7 @@ configurer_python <- function(envname = CONDA_ENV) {
 #' @return Chemin du repertoire Python (character)
 #' @export
 python_module_path <- function() {
-  system.file("python", package = "maestro", mustWork = TRUE)
+  system.file("python", package = "maestronemeton", mustWork = TRUE)
 }
 
 #' Executer l'inference MAESTRO sur des patches (single-modal, legacy)

@@ -1,4 +1,4 @@
-Package: maestro
+Package: maestronemeton
 Title: Forest Species and Land Cover Classification Using MAESTRO and FLAIR Models
 Version: 0.2.0
 Authors@R:

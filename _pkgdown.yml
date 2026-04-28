@@ -9,7 +9,7 @@ template:
     code_font: {google: "JetBrains Mono"}
 
 home:
-  title: maestro — Reconnaissance des essences forestieres et occupation du sol
+  title: maestronemeton — Reconnaissance des essences forestieres et occupation du sol
   description: >
     Pipeline R + Python pour la classification d'essences forestieres
     (PureForest 13 classes) et de l'occupation du sol (CoSIA 19 classes)

@@ -20,7 +20,7 @@ suppressPackageStartupMessages({
       requireNamespace("devtools", quietly = TRUE)) {
     devtools::load_all(quiet = TRUE)
   } else {
-    library(maestro)
+    library(maestronemeton)
   }
 })
 

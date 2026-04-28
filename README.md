@@ -1,4 +1,4 @@
-# maestro - Reconnaissance des essences forestieres
+# maestronemeton - Reconnaissance des essences forestieres
 
 Package R pour la reconnaissance automatique des essences forestieres a
 partir d'une zone d'interet (`aoi.gpkg`) en utilisant le modele
@@ -33,7 +33,7 @@ pip install torch numpy safetensors
 ### En tant que package R
 
 ```r
-library(maestro)
+library(maestronemeton)
 
 # Pipeline complet en une ligne
 maestro_pipeline("data/aoi.gpkg",

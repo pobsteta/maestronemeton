@@ -1,4 +1,4 @@
 library(testthat)
-library(maestro)
+library(maestronemeton)
 
-test_check("maestro")
+test_check("maestronemeton")

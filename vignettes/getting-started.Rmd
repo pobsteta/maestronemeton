@@ -30,7 +30,7 @@ remotes::install_github("pobsteta/maestronemeton")
 Cote Python (reticulate gere l'environnement) :
 
 ```{r}
-maestro::configurer_python()
+maestronemeton::configurer_python()
 ```
 
 `configurer_python()` cree un environnement conda dedie (`maestro-py`) si
@@ -43,7 +43,7 @@ L'AOI est un GeoPackage en Lambert-93 (`EPSG:2154`). Tout polygone
 fonctionne ; voir `inst/extdata/` du package pour un exemple jouet.
 
 ```{r}
-library(maestro)
+library(maestronemeton)
 
 resultat <- maestro_pipeline(
   aoi_path  = "data/aoi.gpkg",

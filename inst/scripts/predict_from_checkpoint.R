@@ -88,13 +88,13 @@ if (!file.exists(args$checkpoint)) {
   stop(sprintf("Checkpoint introuvable : %s", args$checkpoint))
 }
 
-# --- Charger le package maestro ---
+# --- Charger le package maestronemeton ---
 # Si execute depuis le repo, charger via devtools
 if (file.exists("DESCRIPTION")) {
-  message("Chargement du package maestro depuis le depot local...")
+  message("Chargement du package maestronemeton depuis le depot local...")
   suppressPackageStartupMessages(devtools::load_all(quiet = TRUE))
 } else {
-  suppressPackageStartupMessages(library(maestro))
+  suppressPackageStartupMessages(library(maestronemeton))
 }
 
 # --- Parser les annees si fournies ---

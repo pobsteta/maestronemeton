@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 # =============================================================================
 # maestro_cli.R
-# Interface en ligne de commande pour le package maestro
+# Interface en ligne de commande pour le package maestronemeton
 #
 # Utilisation :
 #   Rscript maestro_cli.R --aoi data/aoi.gpkg
@@ -12,13 +12,13 @@
 if (!requireNamespace("optparse", quietly = TRUE)) {
   install.packages("optparse", repos = "https://cloud.r-project.org")
 }
-if (!requireNamespace("maestro", quietly = TRUE)) {
-  stop("Le package 'maestro' n'est pas installe.\n",
+if (!requireNamespace("maestronemeton"emeton", quietly = TRUE)) {
+  stop("Le package 'maestronemeton' n'est pas installe.\n",
        "Installez-le avec : devtools::install() ou R CMD INSTALL .")
 }
 
 library(optparse)
-library(maestro)
+library(maestronemeton)
 
 option_list <- list(
   make_option(c("-a", "--aoi"), type = "character", default = "data/aoi.gpkg",

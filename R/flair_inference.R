@@ -7,7 +7,7 @@
 #' @return Chemin du repertoire Python (character)
 #' @export
 flair_python_module_path <- function() {
-  system.file("python", package = "maestro", mustWork = TRUE)
+  system.file("python", package = "maestronemeton", mustWork = TRUE)
 }
 
 #' Charger un modele FLAIR pour la segmentation

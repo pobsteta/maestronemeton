@@ -62,7 +62,7 @@ generer_rapport <- function(aoi_path,
   .check_rmarkdown(format)
 
   rmd_path <- system.file("scripts/rapport_pipeline_aoi.Rmd",
-                           package = "maestro")
+                           package = "maestronemeton")
   if (!nzchar(rmd_path)) {
     stop("Template Rmd introuvable. Verifiez l'installation du package.",
          call. = FALSE)
@@ -178,7 +178,7 @@ generer_rapport_segmentation <- function(aoi_path,
   .check_rmarkdown(format)
 
   rmd_path <- system.file("scripts/rapport_segmentation.Rmd",
-                           package = "maestro")
+                           package = "maestronemeton")
   if (!nzchar(rmd_path)) {
     stop("Template rapport_segmentation.Rmd introuvable. ",
          "Verifiez l'installation du package.", call. = FALSE)

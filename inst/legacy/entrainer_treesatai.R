@@ -91,7 +91,7 @@ checkpoint_path <- hfhub::hub_download(model_id, ckpt_file)
 cat("  Cache local:", checkpoint_path, "\n")
 
 # --- Lancer l'entrainement Python ---
-train_script <- system.file("python", "train_treesatai.py", package = "maestro")
+train_script <- system.file("python", "train_treesatai.py", package = "maestronemeton")
 if (train_script == "")
   train_script <- file.path("inst", "python", "train_treesatai.py")
 

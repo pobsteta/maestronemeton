@@ -43,7 +43,7 @@
   testthat::with_mocked_bindings(
     code,
     download_ign_tiled = fake_tiled,
-    .package = "maestro"
+    .package = "maestronemeton"
   )
 }
 
@@ -136,7 +136,7 @@ test_that("prepare_dem retourne NULL quand le DTM RGE ALTI ne descend pas", {
     testthat::with_mocked_bindings(
       f(),
       download_ign_tiled = fake_tiled,
-      .package = "maestro"
+      .package = "maestronemeton"
     )
   }
 
@@ -267,7 +267,7 @@ test_that("prepare_dem reutilise le fichier en cache sans appeler le WMS", {
   res <- testthat::with_mocked_bindings(
     suppressMessages(prepare_dem(aoi, out_dir, source = "wms")),
     download_ign_tiled = fake_tiled,
-    .package = "maestro"
+    .package = "maestronemeton"
   )
 
   expect_equal(res$dsm_source, "cache")

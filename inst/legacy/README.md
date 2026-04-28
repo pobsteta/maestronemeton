@@ -2,7 +2,7 @@
 
 Modules TreeSatAI (8 classes regroupees) deplacés ici en phase 0 du plan
 de reprise (cf. `DEV_PLAN.md` a la racine). Ils ne sont plus exportes par
-le package `maestro` et ne font plus partie de la chaine de production.
+le package `maestronemeton` et ne font plus partie de la chaine de production.
 
 Ils sont conserves uniquement pour :
 
