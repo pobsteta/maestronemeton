@@ -16,6 +16,8 @@ Description: Automatic recognition of forest tree species (13 PureForest classes
     blending. Includes spectral indices (NDVI, GNDVI, SAVI) and evaluation
     metrics (mIoU).
 License: MIT + file LICENSE
+URL: https://pobsteta.github.io/maestronemeton/, https://github.com/pobsteta/maestronemeton
+BugReports: https://github.com/pobsteta/maestronemeton/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
