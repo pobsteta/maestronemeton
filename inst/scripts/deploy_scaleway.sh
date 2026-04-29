@@ -39,7 +39,8 @@
 #   --notify-email EMAIL   Email pour notifications debut/fin
 #   --notify-webhook URL   Webhook (ntfy.sh / Slack) pour notifications
 #   --name NAME            Nom de l'instance (defaut: maestro-train)
-#   --data-volume GB       Volume data en Go (defaut: 200, ~145 Go data + marges)
+#   --data-volume GB       Volume data en Go (defaut: 300, marge confortable
+#                          aerial+dem avec purge cache HF entre etapes)
 #   --dry-run              Afficher les commandes sans executer
 #
 # Instances GPU Scaleway recommandees :
@@ -70,7 +71,7 @@ INSTANCE_TYPE="L4-1-24G"
 IMAGE="ubuntu_jammy_gpu_os_12"
 ZONE="fr-par-2"
 INSTANCE_NAME="maestro-train"
-DATA_VOLUME_GB=200
+DATA_VOLUME_GB=300
 # Branche par defaut : la branche locale courante. Permet `bash deploy_scaleway.sh`
 # directement depuis n'importe quelle branche de travail sans avoir a la nommer.
 DEFAULT_BRANCH=$(git -C "$(dirname "$0")/../.." rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
