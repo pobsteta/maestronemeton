@@ -65,7 +65,7 @@ except Exception as e:
         echo "  -> Webhook"
         case "$NOTIFY_WEBHOOK" in
             *ntfy.sh*|*ntfy/*)
-                curl -s -H "Title: $SUBJECT" -d "$SHORT_MSG" "$NOTIFY_WEBHOOK" 2>&1 || true
+                curl -s -H "Title: $SUBJECT" -d "$BODY" "$NOTIFY_WEBHOOK" 2>&1 || true
                 ;;
             *hooks.slack.com*)
                 curl -s -X POST -H 'Content-type: application/json' \
@@ -107,6 +107,48 @@ LR_FT_HEAD="${LR_FT_HEAD:-1e-4}"
 LR_ENCODER="${LR_ENCODER:-1e-5}"
 PATIENCE="${PATIENCE:-5}"
 MODALITIES="${MODALITIES:-aerial}"
+
+# --- Identite instance pour notifs (calcule tot pour que trap ERR soit informatif) ---
+HOSTNAME_LOCAL=$(hostname)
+PUBLIC_IP=$(curl -s --max-time 3 http://169.254.42.42/conf?format=json 2>/dev/null \
+    | python3 -c "import sys,json; print(json.load(sys.stdin).get('public_ip',{}).get('address','<IP>'))" 2>/dev/null \
+    || echo "<IP>")
+
+# --- Trap d'erreur : notifier en cas de crash (avant ou pendant le training) ---
+# set -e propage l'exit, on enrichit juste avec une notif + tail du log.
+trap 'rc=$?; send_notification \
+    "[MAESTRO] CRASH ligne $LINENO" \
+    "Crash sur ${HOSTNAME_LOCAL} (${PUBLIC_IP}) - exit=$rc - voir ~/train.log" \
+    "Crash dans cloud_train_pureforest.sh
+Ligne   : $LINENO
+Cmde    : $BASH_COMMAND
+Exit    : $rc
+
+Dernieres lignes du log :
+$(tail -80 ~/train.log 2>/dev/null || echo "(log indisponible)")"' ERR
+
+# --- Notif de demarrage : envoyee TOT, avant le pre-traitement (qui peut planter sur disque plein) ---
+send_notification \
+    "[MAESTRO] Instance demarree" \
+    "Setup PureForest demarre sur ${HOSTNAME_LOCAL} (${PUBLIC_IP}) - branche=${BRANCH} modalites=${MODALITIES}" \
+    "Instance MAESTRO demarree, setup en cours.
+
+  Hostname    : ${HOSTNAME_LOCAL}
+  IP publique : ${PUBLIC_IP}
+  Branche     : ${BRANCH}
+  Modalites   : ${MODALITIES}
+  Probe ep.   : ${PROBE_EPOCHS}
+  Finetune ep.: ${FINETUNE_EPOCHS}
+
+Etapes a venir :
+  1. clone + venv + deps Python (~3 min)
+  2. pre-traitement aerial (~15 min)
+  3. pre-traitement dem (~30 min)
+  4. download checkpoint MAESTRO_FLAIR-HUB_base (~1 min)
+  5. fine-tune (~14-18 h)
+
+Vous recevrez une autre notif au lancement du fine-tune,
+puis a la fin (ou en cas de crash)."
 
 # --- Cloner le depot ---
 if [ ! -d "$WORK_DIR" ]; then
