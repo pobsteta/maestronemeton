@@ -160,11 +160,21 @@ else:
 "
 
 # --- Preparation du dataset (idempotent par modalite) ---
+# Le cache HF des zips PureForest (imagery-*.zip ~25 Go, lidar-*.zip ~120 Go)
+# est purge entre etapes : une fois les patches extraits, les zips sources ne
+# servent plus. Sans purge, 200 Go ne suffisent pas pour aerial+dem.
+HF_PUREFOREST_BLOBS="$HF_HOME/datasets--IGNF--PureForest/blobs"
+
 echo
 echo "=== Pre-traitement PureForest aerial (~25 Go zip + ~50 Go patches) ==="
 $PYTHON inst/python/prepare_pureforest_aerial.py \
     --output "$DATA_DIR" \
     --cache "$HF_HOME"
+
+if [ -d "$HF_PUREFOREST_BLOBS" ]; then
+    echo "  Purge cache HF aerial (zips imagery-*) ..."
+    rm -rf "$HF_PUREFOREST_BLOBS"/*
+fi
 
 # La modalite dem est generee si elle est demandee dans MODALITIES.
 # Le script est idempotent : reutilise les patches dem.tif deja presents.
@@ -174,6 +184,11 @@ if echo ",$MODALITIES," | grep -q ",dem,"; then
     $PYTHON inst/python/prepare_pureforest_dem.py \
         --output "$DATA_DIR" \
         --cache "$HF_HOME"
+
+    if [ -d "$HF_PUREFOREST_BLOBS" ]; then
+        echo "  Purge cache HF dem (zips lidar-*) ..."
+        rm -rf "$HF_PUREFOREST_BLOBS"/*
+    fi
 fi
 
 # --- Telechargement checkpoint pre-entraine ---

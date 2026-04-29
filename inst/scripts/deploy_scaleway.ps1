@@ -49,7 +49,7 @@ param(
     [int]$FinetuneEpochs = 50,
     [int]$BatchSize = 24,
     [int]$Patience = 5,
-    [int]$DataVolumeGB = 200,
+    [int]$DataVolumeGB = 300,
     [string]$NotifyEmail = "",
     [string]$NotifyWebhook = "",
     [switch]$DryRun
