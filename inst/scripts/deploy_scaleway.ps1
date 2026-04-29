@@ -51,8 +51,14 @@ param(
     [int]$DataVolumeGB = 500,
     [string]$NotifyEmail = "",
     [string]$NotifyWebhook = "",
+    [string]$NtfyTopic = "maestro-train",
     [switch]$DryRun
 )
+
+# Resolution du webhook ntfy : si NotifyWebhook non passe, construire depuis NtfyTopic.
+if (-not $NotifyWebhook -and $NtfyTopic) {
+    $NotifyWebhook = "https://ntfy.sh/$NtfyTopic"
+}
 
 # Detection automatique de la branche locale courante si non fournie.
 if (-not $Branch) {
@@ -90,7 +96,7 @@ Write-Host "  Fine-tune epochs: $FinetuneEpochs"
 Write-Host "  Batch size      : $BatchSize"
 Write-Host "  Patience        : $Patience"
 if ($NotifyEmail -ne "")   { Write-Host "  Notify email    : $NotifyEmail" }
-if ($NotifyWebhook -ne "") { Write-Host "  Notify webhook  : (defini)" }
+if ($NotifyWebhook -ne "") { Write-Host "  Notify webhook  : $NotifyWebhook" }
 Write-Host ""
 
 # --- Verifier les pre-requis ---

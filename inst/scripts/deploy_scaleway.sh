@@ -36,8 +36,14 @@
 #   --finetune-epochs N    Epochs fine-tune complet (defaut: 50)
 #   --batch-size N         Taille batch (defaut: 24, recommande L4-1-24G)
 #   --patience N           Early stopping patience (defaut: 5)
-#   --notify-email EMAIL   Email pour notifications debut/fin
-#   --notify-webhook URL   Webhook (ntfy.sh / Slack) pour notifications
+#   --notify-email EMAIL   Email pour notifications debut/fin (necessite un MTA
+#                          local sur l'instance, generalement absent : preferer
+#                          le webhook ntfy ci-dessous).
+#   --notify-webhook URL   URL webhook complete (override). Defaut construit
+#                          depuis --ntfy-topic.
+#   --ntfy-topic NAME      Topic ntfy.sh (defaut: maestro-train). L'URL
+#                          finale devient https://ntfy.sh/NAME. Topic public,
+#                          choisir un nom non-trivial pour eviter l'ecoute.
 #   --name NAME            Nom de l'instance (defaut: maestro-train)
 #   --data-volume GB       Volume data en Go (defaut: 500, dimensionne pour
 #                          le pic disque aerial+dem : ~150 Go patches aerial
@@ -84,6 +90,9 @@ FINETUNE_EPOCHS=50
 BATCH_SIZE=24
 PATIENCE=5
 NOTIFY_EMAIL=""
+# Topic ntfy.sh par defaut. Public, donc devinable : on peut l'override avec
+# --ntfy-topic ou en passant directement --notify-webhook une URL custom.
+NTFY_TOPIC="maestro-train"
 NOTIFY_WEBHOOK=""
 DRY_RUN=false
 
@@ -101,6 +110,7 @@ while [[ $# -gt 0 ]]; do
         --patience)        PATIENCE="$2"; shift 2 ;;
         --notify-email)    NOTIFY_EMAIL="$2"; shift 2 ;;
         --notify-webhook)  NOTIFY_WEBHOOK="$2"; shift 2 ;;
+        --ntfy-topic)      NTFY_TOPIC="$2"; shift 2 ;;
         --name)            INSTANCE_NAME="$2"; shift 2 ;;
         --data-volume)     DATA_VOLUME_GB="$2"; shift 2 ;;
         --dry-run)         DRY_RUN=true; shift ;;
@@ -111,6 +121,14 @@ while [[ $# -gt 0 ]]; do
         *) log_error "Option inconnue: $1"; exit 1 ;;
     esac
 done
+
+# --- Resolution du webhook ntfy ---
+# Si --notify-webhook n'a pas ete passe explicitement, on construit l'URL
+# ntfy.sh a partir de NTFY_TOPIC. Pour desactiver toute notif webhook,
+# passer --notify-webhook "".
+if [ -z "$NOTIFY_WEBHOOK" ] && [ -n "$NTFY_TOPIC" ]; then
+    NOTIFY_WEBHOOK="https://ntfy.sh/${NTFY_TOPIC}"
+fi
 
 echo ""
 echo "========================================================"
@@ -130,7 +148,7 @@ echo "  Fine-tune epochs: $FINETUNE_EPOCHS"
 echo "  Batch size      : $BATCH_SIZE"
 echo "  Patience        : $PATIENCE"
 [ -n "$NOTIFY_EMAIL" ]   && echo "  Notify email    : $NOTIFY_EMAIL"
-[ -n "$NOTIFY_WEBHOOK" ] && echo "  Notify webhook  : (defini)"
+[ -n "$NOTIFY_WEBHOOK" ] && echo "  Notify webhook  : $NOTIFY_WEBHOOK"
 echo ""
 
 # --- Verifier les pre-requis ---
