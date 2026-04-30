@@ -23,8 +23,8 @@ devtools::install(".")
 ### Dependances Python
 
 ``` bash
-conda create -n maestro python=3.11 -y
-conda activate maestro
+conda create -n maestronemeton python=3.11 -y
+conda activate maestronemeton
 pip install torch numpy safetensors
 ```
 
