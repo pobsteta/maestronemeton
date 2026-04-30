@@ -1,6 +1,6 @@
 Package: maestronemeton
 Title: Forest Species and Land Cover Classification Using MAESTRO and FLAIR Models
-Version: 0.2.0
+Version: 0.2.1
 Authors@R:
     person("Pierre", "Obsteta", role = c("aut", "cre"),
            email = "pierre.obsteta@example.com")
