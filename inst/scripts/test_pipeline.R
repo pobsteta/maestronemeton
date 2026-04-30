@@ -3,7 +3,7 @@
 # test_pipeline.R - validation E2E du wiring MAESTRO multi-modal
 #
 # Couvre :
-#   - Test 1 : configuration Python (conda env maestro)
+#   - Test 1 : configuration Python (conda env maestronemeton)
 #   - Test 2 : chargement du modele MAESTRO_FLAIR-HUB_base
 #   - Test 3 : forward pass avec tenseurs synthetiques pour chaque combinaison
 #              de modalites (aerial seul, aerial+dem, multi-modal complet)

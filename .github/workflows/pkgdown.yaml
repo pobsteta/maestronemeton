@@ -11,6 +11,12 @@ on:
 
 name: pkgdown
 
+# Annule un run en cours sur la meme branche/ref si un nouveau push arrive,
+# pour eviter de saturer la file et accumuler des cancels timeoute.
+concurrency:
+  group: pkgdown-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pkgdown:
     runs-on: ubuntu-latest

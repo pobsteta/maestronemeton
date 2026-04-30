@@ -26,17 +26,17 @@ NULL
   # Configurer RETICULATE_PYTHON AVANT que reticulate ne s'initialise,
 
   # sinon il s'accroche au premier Python trouve (uv/reticulate) et on
-  # ne peut plus basculer vers l'env conda maestro.
+  # ne peut plus basculer vers l'env conda maestronemeton.
   if (nchar(Sys.getenv("RETICULATE_PYTHON")) == 0) {
-    py_path <- .find_maestro_python()
+    py_path <- .find_maestronemeton_python()
     if (!is.null(py_path)) {
       Sys.setenv(RETICULATE_PYTHON = py_path)
     }
   }
 }
 
-# Chercher le Python de l'env conda maestro sans charger reticulate
-.find_maestro_python <- function(envname = "maestro") {
+# Chercher le Python de l'env conda maestronemeton sans charger reticulate
+.find_maestronemeton_python <- function(envname = "maestronemeton") {
   conda_dirs <- .conda_search_dirs()
   for (conda_root in conda_dirs) {
     py_path <- if (.Platform$OS.type == "windows") {

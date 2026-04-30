@@ -7,8 +7,8 @@
   # Eviter le conflit OpenMP sur Windows
   Sys.setenv(KMP_DUPLICATE_LIB_OK = "TRUE")
 
-  # Detecter le Python de l'environnement conda maestro
-  envname <- "maestro"
+  # Detecter le Python de l'environnement conda maestronemeton
+  envname <- "maestronemeton"
   conda_dirs <- if (.Platform$OS.type == "windows") {
     home <- Sys.getenv("USERPROFILE", Sys.getenv("HOME"))
     c(file.path(home, "miniforge3"),
@@ -41,8 +41,8 @@
 
   # NB: Ne PAS appeler py_config() ou py_module_available() ici !
   # Cela forcerait l'initialisation de Python avec le mauvais interpreteur
-  # (uv/reticulate au lieu de conda maestro). La verification des modules
-  # se fait dans configurer_python() au moment de l'inference.
+  # (uv/reticulate au lieu de conda maestronemeton). La verification des
+  # modules se fait dans configurer_python() au moment de l'inference.
 
   message("[maestronemeton] Environnement configure. Token HF: ",
           if (nchar(Sys.getenv("HUGGING_FACE_HUB_TOKEN")) > 0) "OK" else "MANQUANT")

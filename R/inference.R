@@ -2,17 +2,17 @@
 # Environnement conda MAESTRO
 # ==============================================================================
 
-#' Nom de l'environnement conda pour MAESTRO
+#' Nom de l'environnement conda pour maestronemeton
 #' @export
-CONDA_ENV <- "maestro"
+CONDA_ENV <- "maestronemeton"
 
-#' Configurer l'environnement Python pour MAESTRO
+#' Configurer l'environnement Python pour maestronemeton
 #'
-#' Configure reticulate pour utiliser l'environnement conda `maestro`
+#' Configure reticulate pour utiliser l'environnement conda `maestronemeton`
 #' et verifie que tous les modules requis sont disponibles.
 #' Pattern identique a `setup_python()` de flair_hub_nemeton.
 #'
-#' @param envname Nom de l'environnement conda (defaut: "maestro")
+#' @param envname Nom de l'environnement conda (defaut: "maestronemeton")
 #' @return Invisible NULL
 #' @export
 configurer_python <- function(envname = CONDA_ENV) {
@@ -27,7 +27,7 @@ configurer_python <- function(envname = CONDA_ENV) {
   # Si Python est deja initialise par reticulate, verifier si c'est le bon
   if (reticulate::py_available(initialize = FALSE)) {
     py_actif <- reticulate::py_config()$python
-    attendu <- .find_maestro_python(envname)
+    attendu <- .find_maestronemeton_python(envname)
 
     # Normaliser les chemins pour comparaison (Windows: / vs \)
     py_norm <- normalizePath(py_actif, winslash = "/", mustWork = FALSE)
@@ -62,7 +62,7 @@ configurer_python <- function(envname = CONDA_ENV) {
   # Python pas encore initialise : configurer l'env conda
 
   # Chercher le Python de l'environnement conda directement
-  attendu <- .find_maestro_python(envname)
+  attendu <- .find_maestronemeton_python(envname)
   if (!is.null(attendu) && nchar(Sys.getenv("RETICULATE_PYTHON")) == 0) {
     Sys.setenv(RETICULATE_PYTHON = attendu)
     message("Python de l'env '", envname, "' detecte: ", attendu)
@@ -104,8 +104,8 @@ configurer_python <- function(envname = CONDA_ENV) {
   }
 
   if (!ok) {
-    stop("Modules Python manquants. Installez-les dans l'env 'maestro':\n",
-         "  conda activate maestro\n",
+    stop("Modules Python manquants. Installez-les dans l'env 'maestronemeton':\n",
+         "  conda activate maestronemeton\n",
          "  pip install torch numpy safetensors tifffile Pillow ",
          "segmentation-models-pytorch")
   }

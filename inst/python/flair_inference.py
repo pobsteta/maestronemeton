@@ -202,8 +202,8 @@ def charger_modele_flair(chemin_poids, n_classes=19, in_channels=4,
     if model is None:
         raise ImportError(
             "segmentation_models_pytorch est requis pour les modeles FLAIR. "
-            "Installez-le dans l'env conda maestro:\n"
-            "  conda activate maestro\n"
+            "Installez-le dans l'env conda maestronemeton:\n"
+            "  conda activate maestronemeton\n"
             "  pip install segmentation-models-pytorch"
         )
 

@@ -378,8 +378,8 @@ if (lancer_inference) {
   }, error = function(e) {
     message("\nErreur lors de l'inference: ", e$message)
     message("Installation :")
-    message("  conda create -n maestro python=3.10")
-    message("  conda activate maestro")
+    message("  conda create -n maestronemeton python=3.10")
+    message("  conda activate maestronemeton")
     message("  pip install torch numpy safetensors")
     message("\nLe rapport sera genere sans la carte des essences.")
   })
