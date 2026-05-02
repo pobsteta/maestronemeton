@@ -45,6 +45,12 @@
 #                          --resume.
 #   --no-amp               Desactive le mixed precision bf16 (active par
 #                          defaut, speedup 1.5-2x). A utiliser si NaN observes.
+#   --hf-token TOKEN       Token HuggingFace (override). Par defaut, lit
+#                          .Renviron du projet (HUGGING_FACE_HUB_TOKEN,
+#                          HUGGINGFACE_HUB_TOKEN ou HF_TOKEN), puis $HF_TOKEN
+#                          de l'environnement. Sans token, requetes HF
+#                          anonymes -> rate-limit ~1000 req/h, downloads
+#                          plus lents et warning HF affiche.
 #   --notify-email EMAIL   Email pour notifications debut/fin (necessite un MTA
 #                          local sur l'instance, generalement absent : preferer
 #                          le webhook ntfy ci-dessous).
@@ -101,6 +107,7 @@ PATIENCE=5
 RESUME=""
 SKIP_PROBE=""
 USE_AMP="1"
+HF_TOKEN_OVERRIDE=""
 NOTIFY_EMAIL=""
 # Topic ntfy.sh par defaut. Public, donc devinable : on peut l'override avec
 # --ntfy-topic ou en passant directement --notify-webhook une URL custom.
@@ -122,6 +129,7 @@ while [[ $# -gt 0 ]]; do
         --resume)          RESUME="$2"; shift 2 ;;
         --skip-probe)      SKIP_PROBE=1; shift ;;
         --no-amp)          USE_AMP=""; shift ;;
+        --hf-token)        HF_TOKEN_OVERRIDE="$2"; shift 2 ;;
         --patience)        PATIENCE="$2"; shift 2 ;;
         --notify-email)    NOTIFY_EMAIL="$2"; shift 2 ;;
         --notify-webhook)  NOTIFY_WEBHOOK="$2"; shift 2 ;;
@@ -145,6 +153,32 @@ if [ -z "$NOTIFY_WEBHOOK" ] && [ -n "$NTFY_TOPIC" ]; then
     NOTIFY_WEBHOOK="https://ntfy.sh/${NTFY_TOPIC}"
 fi
 
+# --- Resolution du token HuggingFace ---
+# Priorite : --hf-token > $HF_TOKEN env > .Renviron du projet
+# (HUGGING_FACE_HUB_TOKEN, HUGGINGFACE_HUB_TOKEN ou HF_TOKEN).
+# Le token est propage en HF_TOKEN (nom canonique lu par huggingface_hub)
+# sur l'instance distante. .Renviron est ignore par git, safe a lire.
+DEPLOY_REPO_ROOT="$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd)"
+HF_TOKEN_FINAL=""
+if [ -n "$HF_TOKEN_OVERRIDE" ]; then
+    HF_TOKEN_FINAL="$HF_TOKEN_OVERRIDE"
+elif [ -n "${HF_TOKEN:-}" ]; then
+    HF_TOKEN_FINAL="$HF_TOKEN"
+else
+    for RENV_CANDIDATE in "$DEPLOY_REPO_ROOT/.Renviron" ".Renviron"; do
+        [ ! -f "$RENV_CANDIDATE" ] && continue
+        for VAR in HUGGING_FACE_HUB_TOKEN HUGGINGFACE_HUB_TOKEN HF_TOKEN; do
+            VAL=$(grep -E "^${VAR}=" "$RENV_CANDIDATE" 2>/dev/null \
+                  | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '\r' \
+                  | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            if [ -n "$VAL" ]; then
+                HF_TOKEN_FINAL="$VAL"
+                break 2
+            fi
+        done
+    done
+fi
+
 echo ""
 echo "========================================================"
 echo " MAESTRO - Deploiement GPU sur Scaleway"
@@ -165,6 +199,7 @@ echo "  Patience        : $PATIENCE"
 [ -n "$RESUME" ]         && echo "  Resume          : $RESUME"
 [ -n "$SKIP_PROBE" ]     && echo "  Skip probe      : oui"
 [ "$USE_AMP" = "1" ]     && echo "  AMP (bf16)      : actif" || echo "  AMP (bf16)      : desactive"
+[ -n "$HF_TOKEN_FINAL" ] && echo "  HF token        : (defini, $(echo $HF_TOKEN_FINAL | wc -c) car)" || echo "  HF token        : (absent — rate-limite anonyme)"
 [ -n "$NOTIFY_EMAIL" ]   && echo "  Notify email    : $NOTIFY_EMAIL"
 [ -n "$NOTIFY_WEBHOOK" ] && echo "  Notify webhook  : $NOTIFY_WEBHOOK"
 echo ""
@@ -407,6 +442,7 @@ export NOTIFY_WEBHOOK="${NOTIFY_WEBHOOK}"
 export RESUME="${RESUME}"
 export SKIP_PROBE="${SKIP_PROBE}"
 export USE_AMP="${USE_AMP}"
+export HF_TOKEN="${HF_TOKEN_FINAL}"
 bash /root/cloud_train_pureforest.sh 2>&1 | tee /root/train.log
 TRAIN_EOF
     chmod +x /root/run_train.sh
