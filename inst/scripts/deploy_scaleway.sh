@@ -34,8 +34,17 @@
 #                          Ex: aerial,dem (active prepare_pureforest_dem.py)
 #   --probe-epochs N       Epochs linear probe (defaut: 10)
 #   --finetune-epochs N    Epochs fine-tune complet (defaut: 50)
-#   --batch-size N         Taille batch (defaut: 24, recommande L4-1-24G)
+#   --batch-size N         Taille batch (defaut: 16 sur L4 fp32 / aerial+dem,
+#                          monter a 24-32 avec --no-amp inactif sur L4, 64+ sur H100)
 #   --patience N           Early stopping patience (defaut: 5)
+#   --resume PATH          Chemin LOCAL d'un checkpoint .pt a uploader sur
+#                          l'instance et a charger avant l'entrainement.
+#                          Combine avec --skip-probe pour reprendre apres
+#                          un crash en phase B (economise ~50h GPU).
+#   --skip-probe           Sauter la phase A (linear probe). Utile avec
+#                          --resume.
+#   --no-amp               Desactive le mixed precision bf16 (active par
+#                          defaut, speedup 1.5-2x). A utiliser si NaN observes.
 #   --notify-email EMAIL   Email pour notifications debut/fin (necessite un MTA
 #                          local sur l'instance, generalement absent : preferer
 #                          le webhook ntfy ci-dessous).
@@ -87,8 +96,11 @@ BRANCH="$DEFAULT_BRANCH"
 MODALITIES="aerial"
 PROBE_EPOCHS=10
 FINETUNE_EPOCHS=50
-BATCH_SIZE=24
+BATCH_SIZE=16
 PATIENCE=5
+RESUME=""
+SKIP_PROBE=""
+USE_AMP="1"
 NOTIFY_EMAIL=""
 # Topic ntfy.sh par defaut. Public, donc devinable : on peut l'override avec
 # --ntfy-topic ou en passant directement --notify-webhook une URL custom.
@@ -107,6 +119,9 @@ while [[ $# -gt 0 ]]; do
         --probe-epochs)    PROBE_EPOCHS="$2"; shift 2 ;;
         --finetune-epochs) FINETUNE_EPOCHS="$2"; shift 2 ;;
         --batch-size)      BATCH_SIZE="$2"; shift 2 ;;
+        --resume)          RESUME="$2"; shift 2 ;;
+        --skip-probe)      SKIP_PROBE=1; shift ;;
+        --no-amp)          USE_AMP=""; shift ;;
         --patience)        PATIENCE="$2"; shift 2 ;;
         --notify-email)    NOTIFY_EMAIL="$2"; shift 2 ;;
         --notify-webhook)  NOTIFY_WEBHOOK="$2"; shift 2 ;;
@@ -147,6 +162,9 @@ echo "  Probe epochs    : $PROBE_EPOCHS"
 echo "  Fine-tune epochs: $FINETUNE_EPOCHS"
 echo "  Batch size      : $BATCH_SIZE"
 echo "  Patience        : $PATIENCE"
+[ -n "$RESUME" ]         && echo "  Resume          : $RESUME"
+[ -n "$SKIP_PROBE" ]     && echo "  Skip probe      : oui"
+[ "$USE_AMP" = "1" ]     && echo "  AMP (bf16)      : actif" || echo "  AMP (bf16)      : desactive"
 [ -n "$NOTIFY_EMAIL" ]   && echo "  Notify email    : $NOTIFY_EMAIL"
 [ -n "$NOTIFY_WEBHOOK" ] && echo "  Notify webhook  : $NOTIFY_WEBHOOK"
 echo ""
@@ -354,6 +372,21 @@ scp -o StrictHostKeyChecking=no \
     "$REPO_ROOT/inst/scripts/cloud_train_pureforest.sh" \
     "root@$PUBLIC_IP:~/"
 
+# Si --resume est passe : envoyer le checkpoint sur l'instance et reecrire
+# RESUME pour pointer le chemin distant. La taille typique est 500-600 Mo
+# (modele MAESTRO base 13 classes), comptez 1-3 min de transfer.
+if [ -n "$RESUME" ]; then
+    if [ ! -f "$RESUME" ]; then
+        log_error "--resume : fichier introuvable : $RESUME"
+        exit 1
+    fi
+    REMOTE_RESUME="/data/resume_checkpoint.pt"
+    log_info "Envoi du checkpoint resume ($(du -h "$RESUME" | cut -f1)) -> $REMOTE_RESUME"
+    scp -o StrictHostKeyChecking=no "$RESUME" "root@$PUBLIC_IP:$REMOTE_RESUME"
+    RESUME="$REMOTE_RESUME"
+    log_ok "Checkpoint envoye"
+fi
+
 # Installer tmux pour la persistance, puis lancer le pipeline complet
 # (clone branche -> pip install pinne -> prepare aerial[+dem] -> finetune).
 log_info "Installation tmux + lancement de l'entrainement..."
@@ -371,6 +404,9 @@ export BATCH_SIZE="${BATCH_SIZE}"
 export PATIENCE="${PATIENCE}"
 export NOTIFY_EMAIL="${NOTIFY_EMAIL}"
 export NOTIFY_WEBHOOK="${NOTIFY_WEBHOOK}"
+export RESUME="${RESUME}"
+export SKIP_PROBE="${SKIP_PROBE}"
+export USE_AMP="${USE_AMP}"
 bash /root/cloud_train_pureforest.sh 2>&1 | tee /root/train.log
 TRAIN_EOF
     chmod +x /root/run_train.sh

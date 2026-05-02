@@ -13,7 +13,8 @@
 # Variables d'environnement (toutes optionnelles) :
 #   PROBE_EPOCHS=10        Epochs linear probe
 #   FINETUNE_EPOCHS=50     Epochs fine-tune complet
-#   BATCH_SIZE=24          Taille batch (24 sur L4-1-24G, 64 sur H100)
+#   BATCH_SIZE=16          Taille batch (16 sur L4-1-24G avec aerial+dem fp32,
+#                          24 sur L4 avec AMP, 64 sur H100)
 #   LR_HEAD=1e-3           LR head pendant le probe
 #   LR_FT_HEAD=1e-4        LR head pendant le fine-tune
 #   LR_ENCODER=1e-5        LR encodeur pendant le fine-tune
@@ -22,6 +23,11 @@
 #   BRANCH=main            Branche git
 #   NOTIFY_EMAIL=...       Email pour notifications
 #   NOTIFY_WEBHOOK=...     URL webhook (ntfy.sh, Slack, etc.)
+#   RESUME=/path/best.pt   Reprise depuis un checkpoint .pt (charge avant probe)
+#   SKIP_PROBE=1           Sauter la phase A (utile avec RESUME apres un crash
+#                          en phase B - economise ~50h GPU)
+#   USE_AMP=1              Mixed precision bf16 (defaut active, 1.5-2x speedup)
+#                          Mettre USE_AMP="" pour desactiver.
 # =============================================================================
 
 set -euo pipefail
@@ -101,12 +107,27 @@ fi
 
 PROBE_EPOCHS="${PROBE_EPOCHS:-10}"
 FINETUNE_EPOCHS="${FINETUNE_EPOCHS:-50}"
-BATCH_SIZE="${BATCH_SIZE:-24}"
+BATCH_SIZE="${BATCH_SIZE:-16}"
 LR_HEAD="${LR_HEAD:-1e-3}"
 LR_FT_HEAD="${LR_FT_HEAD:-1e-4}"
 LR_ENCODER="${LR_ENCODER:-1e-5}"
 PATIENCE="${PATIENCE:-5}"
 MODALITIES="${MODALITIES:-aerial}"
+# Reprise + AMP (nouvelles options, vides par defaut)
+RESUME="${RESUME:-}"
+SKIP_PROBE="${SKIP_PROBE:-}"
+USE_AMP="${USE_AMP:-1}"
+
+# --- Anti-deadlock : 1 thread BLAS par worker ---
+# Sans ces vars, MKL/OpenBLAS spawne automatiquement N threads par worker, ce
+# qui provoque un fight de threads (cause probable du deadlock observe sur
+# Apr 30 ou 8 threads spinnaient a 100% CPU avec GPU a 0%). Avec 1 thread
+# BLAS par worker, les num_workers du DataLoader saturent les vCPU sans
+# contention.
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
 
 # --- Identite instance pour notifs (calcule tot pour que trap ERR soit informatif) ---
 HOSTNAME_LOCAL=$(hostname)
@@ -283,11 +304,19 @@ echo "  Modalites        : $MODALITIES"
 echo
 
 mkdir -p "$OUTPUT_DIR"
-N_WORKERS=$(nproc --ignore=2 2>/dev/null || echo 4)
+N_WORKERS=$(nproc 2>/dev/null || echo 4)
+# Saturer les vCPU disponibles : avec OMP_NUM_THREADS=1 chaque worker est
+# leger, on peut en lancer autant qu'il y a de vCPU sans contention.
 N_WORKERS=$((N_WORKERS > 8 ? 8 : N_WORKERS))
 
 # Convertir "aerial,dem" en "aerial dem"
 MODS_ARGS=$(echo "$MODALITIES" | tr ',' ' ')
+
+# Options optionnelles (vides si non passees)
+EXTRA_ARGS=""
+[ -n "$RESUME" ]                    && EXTRA_ARGS="$EXTRA_ARGS --resume $RESUME"
+[ -n "$SKIP_PROBE" ]                && EXTRA_ARGS="$EXTRA_ARGS --skip-probe"
+[ "$USE_AMP" = "1" ] && EXTRA_ARGS="$EXTRA_ARGS --amp"
 
 $PYTHON inst/python/pureforest_finetune.py \
     --checkpoint "$CHECKPOINT" \
@@ -302,7 +331,7 @@ $PYTHON inst/python/pureforest_finetune.py \
     --lr-encoder "$LR_ENCODER" \
     --patience "$PATIENCE" \
     --workers "$N_WORKERS" \
-    --gpu
+    --gpu $EXTRA_ARGS
 
 # --- Resultats ---
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)

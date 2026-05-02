@@ -53,7 +53,16 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.multiprocessing as mp
 from torch.utils.data import DataLoader
+
+# DataLoader workers : sharing par fichier au lieu du shared memory pour
+# eviter les bugs IPC sous fork (cause probable du deadlock observe sur le run
+# Apr 29 ou 8 threads spinnaient a 100% CPU avec GPU a 0%).
+try:
+    mp.set_sharing_strategy("file_system")
+except Exception:  # pragma: no cover - best effort
+    pass
 
 # Architecture MAESTRO
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -109,6 +118,17 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--no-augment", action="store_true",
                    help="Desactive l'augmentation flip H/V")
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--resume", type=str, default=None,
+                   help="Reprendre les poids depuis un checkpoint .pt existant "
+                        "(typiquement un best probe). Le state_dict est charge "
+                        "AVANT la phase A (donc utile combine avec --skip-probe).")
+    p.add_argument("--skip-probe", action="store_true",
+                   help="Sauter la phase A (linear probe). Utile avec --resume "
+                        "pour repartir directement en fine-tune apres un crash.")
+    p.add_argument("--amp", action="store_true",
+                   help="Active mixed precision (bfloat16 sur GPU compatible). "
+                        "Speedup 1.5-2x sur L4, 3x sur H100. bf16 est numeriquement "
+                        "plus stable que fp16 pour les ViT, pas de GradScaler requis.")
     return p.parse_args()
 
 
@@ -233,7 +253,8 @@ def confusion_matrix(preds: list[int], labels: list[int],
 # ---------------------------------------------------------------------------
 
 def run_epoch(model, loader, criterion, optimizer, device,
-                augment: bool = False, train: bool = True) -> tuple[float, list[int], list[int]]:
+                augment: bool = False, train: bool = True,
+                amp_dtype=None) -> tuple[float, list[int], list[int]]:
     if train:
         model.train()
     else:
@@ -242,6 +263,8 @@ def run_epoch(model, loader, criterion, optimizer, device,
     total_loss = 0.0
     n_seen = 0
     all_preds, all_labels = [], []
+
+    use_amp = amp_dtype is not None and device.type == "cuda"
 
     ctx = torch.enable_grad() if train else torch.no_grad()
     with ctx:
@@ -260,10 +283,18 @@ def run_epoch(model, loader, criterion, optimizer, device,
 
             if train:
                 optimizer.zero_grad()
-            logits = model(inputs)
-            loss = criterion(logits, targets)
+
+            if use_amp:
+                with torch.autocast(device_type="cuda", dtype=amp_dtype):
+                    logits = model(inputs)
+                    loss = criterion(logits, targets)
+            else:
+                logits = model(inputs)
+                loss = criterion(logits, targets)
 
             if train:
+                # bf16 ne necessite pas de GradScaler (range similaire au fp32).
+                # fp16 en revanche, mais on privilegie bf16 quand disponible.
                 loss.backward()
                 optimizer.step()
 
@@ -336,14 +367,23 @@ def main() -> int:
         print("ERREUR: split train vide.", file=sys.stderr)
         return 1
 
+    # persistent_workers + prefetch_factor : evite le respawn des workers a
+    # chaque epoch (10 epochs probe = 10-20 min sauves) et prefetch 4 batches
+    # par worker pour mieux saturer la GPU. Compense le bottleneck I/O des .tif.
+    loader_kwargs = dict(
+        num_workers=args.workers,
+        collate_fn=collate_multimodal,
+        pin_memory=(device.type == "cuda"),
+    )
+    if args.workers > 0:
+        loader_kwargs.update(persistent_workers=True, prefetch_factor=4)
+
     train_loader = DataLoader(
         train_ds, batch_size=args.batch_size, shuffle=True,
-        num_workers=args.workers, collate_fn=collate_multimodal,
-        pin_memory=(device.type == "cuda"), drop_last=True)
+        drop_last=True, **loader_kwargs)
     val_loader = DataLoader(
         val_ds, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, collate_fn=collate_multimodal,
-        pin_memory=(device.type == "cuda"))
+        **loader_kwargs)
 
     # --- Class weights (sur le split train) ---
     train_targets = [lbl for _, lbl in train_ds.samples]
@@ -367,10 +407,44 @@ def main() -> int:
     best_epoch = 0
     output_path = Path(args.output)
 
+    # --- Reprise eventuelle depuis un checkpoint .pt deja ecrit ---
+    if args.resume:
+        resume_path = Path(args.resume)
+        print(f"\n=== Reprise depuis {resume_path} ===")
+        ckpt = torch.load(str(resume_path), map_location=device, weights_only=False)
+        missing, unexpected = model.load_state_dict(ckpt["state_dict"], strict=False)
+        if missing:
+            print(f"  ATTENTION cles manquantes : {len(missing)} "
+                  f"(ex: {missing[:3]})")
+        if unexpected:
+            print(f"  ATTENTION cles inattendues : {len(unexpected)} "
+                  f"(ex: {unexpected[:3]})")
+        prev_bacc = float(ckpt.get("val_bacc", 0.0))
+        prev_phase = ckpt.get("phase", "?")
+        prev_history = ckpt.get("history")
+        if isinstance(prev_history, dict) and prev_history:
+            for k in history:
+                history[k].extend(prev_history.get(k, []))
+        best_val_bacc = prev_bacc
+        best_epoch = int(ckpt.get("epoch", 0))
+        print(f"  Reprise : phase={prev_phase} epoch={best_epoch} "
+              f"val_bacc={prev_bacc:.1f}%")
+
+    # --- AMP : bfloat16 si compatible ---
+    use_amp = bool(args.amp) and device.type == "cuda"
+    if use_amp:
+        bf16_ok = torch.cuda.is_bf16_supported()
+        amp_dtype = torch.bfloat16 if bf16_ok else torch.float16
+        print(f"\nAMP active : autocast {amp_dtype}")
+    else:
+        amp_dtype = None
+
     # ------------------------------------------------------------------
     # Phase A : Linear probe (encodeur fige)
     # ------------------------------------------------------------------
-    if args.probe_epochs > 0:
+    if args.skip_probe:
+        print("\n=== Phase A : SKIPPED (--skip-probe) ===")
+    elif args.probe_epochs > 0:
         print("\n=== Phase A : Linear probe (encodeur fige) ===")
         for n, p in model.named_parameters():
             p.requires_grad = n.startswith("head.")
@@ -388,9 +462,11 @@ def main() -> int:
             print(f"\n  --- Probe epoch {epoch}/{args.probe_epochs} ---")
             tr_loss, _, _ = run_epoch(model, train_loader, criterion,
                                           optimizer, device,
-                                          augment=not args.no_augment, train=True)
+                                          augment=not args.no_augment, train=True,
+                                          amp_dtype=amp_dtype)
             v_loss, v_preds, v_labels = run_epoch(model, val_loader, criterion,
-                                                       None, device, train=False)
+                                                       None, device, train=False,
+                                                       amp_dtype=amp_dtype)
             scheduler.step()
 
             v_acc  = sum(p == l for p, l in zip(v_preds, v_labels)) / max(len(v_labels), 1) * 100
@@ -441,9 +517,11 @@ def main() -> int:
             print(f"\n  --- Fine-tune epoch {epoch}/{args.finetune_epochs} ---")
             tr_loss, _, _ = run_epoch(model, train_loader, criterion,
                                           optimizer, device,
-                                          augment=not args.no_augment, train=True)
+                                          augment=not args.no_augment, train=True,
+                                          amp_dtype=amp_dtype)
             v_loss, v_preds, v_labels = run_epoch(model, val_loader, criterion,
-                                                       None, device, train=False)
+                                                       None, device, train=False,
+                                                       amp_dtype=amp_dtype)
             scheduler.step()
 
             v_acc  = sum(p == l for p, l in zip(v_preds, v_labels)) / max(len(v_labels), 1) * 100
@@ -487,8 +565,7 @@ def main() -> int:
             modalities=args.modalities, normalize=True)
         test_loader = DataLoader(
             test_ds, batch_size=args.batch_size, shuffle=False,
-            num_workers=args.workers, collate_fn=collate_multimodal,
-            pin_memory=(device.type == "cuda"))
+            **loader_kwargs)
 
         # Recharger le meilleur checkpoint
         best = torch.load(str(output_path), map_location=device,
@@ -496,7 +573,8 @@ def main() -> int:
         model.load_state_dict(best["state_dict"])
 
         _, t_preds, t_labels = run_epoch(model, test_loader, criterion,
-                                              None, device, train=False)
+                                              None, device, train=False,
+                                              amp_dtype=amp_dtype)
         t_acc  = sum(p == l for p, l in zip(t_preds, t_labels)) / max(len(t_labels), 1) * 100
         t_bacc = balanced_accuracy(t_preds, t_labels) * 100
         t_f1   = f1_macro(t_preds, t_labels) * 100
