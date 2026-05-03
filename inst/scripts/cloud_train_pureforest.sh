@@ -235,28 +235,50 @@ HF_PUREFOREST_BLOBS="$HF_HOME/datasets--IGNF--PureForest/blobs"
 
 echo
 echo "=== Pre-traitement PureForest aerial (~25 Go zip + ~50 Go patches) ==="
+AERIAL_START=$SECONDS
 $PYTHON inst/python/prepare_pureforest_aerial.py \
     --output "$DATA_DIR" \
     --cache "$HF_HOME"
+AERIAL_DURATION=$(( (SECONDS - AERIAL_START) / 60 ))
 
 if [ -d "$HF_PUREFOREST_BLOBS" ]; then
     echo "  Purge cache HF aerial (zips imagery-*) ..."
     rm -rf "$HF_PUREFOREST_BLOBS"/*
 fi
 
+send_notification \
+    "[MAESTRO] Pre-traitement aerial OK" \
+    "Aerial extrait en ${AERIAL_DURATION} min sur ${HOSTNAME_LOCAL} (${PUBLIC_IP})" \
+    "Pre-traitement aerial termine.
+  Duree    : ${AERIAL_DURATION} min
+  Sortie   : ${DATA_DIR}/patches/<patch_id>/aerial.tif (4 canaux RGBI 256x256)
+  Cache HF aerial purge."
+
 # La modalite dem est generee si elle est demandee dans MODALITIES.
 # Le script est idempotent : reutilise les patches dem.tif deja presents.
 if echo ",$MODALITIES," | grep -q ",dem,"; then
     echo
     echo "=== Pre-traitement PureForest dem (LAZ -> DSM/DTM, ~120 Go zip + ~3 Go patches) ==="
+    DEM_START=$SECONDS
     $PYTHON inst/python/prepare_pureforest_dem.py \
         --output "$DATA_DIR" \
         --cache "$HF_HOME"
+    DEM_DURATION=$(( (SECONDS - DEM_START) / 60 ))
 
     if [ -d "$HF_PUREFOREST_BLOBS" ]; then
         echo "  Purge cache HF dem (zips lidar-*) ..."
         rm -rf "$HF_PUREFOREST_BLOBS"/*
     fi
+
+    send_notification \
+        "[MAESTRO] Pre-traitement dem OK" \
+        "DEM extrait en ${DEM_DURATION} min sur ${HOSTNAME_LOCAL} (${PUBLIC_IP})" \
+        "Pre-traitement dem (DSM/DTM via lasR triangulation) termine.
+  Duree    : ${DEM_DURATION} min
+  Sortie   : ${DATA_DIR}/patches/<patch_id>/dem.tif (2 canaux DSM/DTM 256x256)
+  Cache HF dem purge.
+
+Etape suivante : download checkpoint pre-entraine MAESTRO_FLAIR-HUB_base."
 fi
 
 # --- Telechargement checkpoint pre-entraine ---

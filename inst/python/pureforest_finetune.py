@@ -45,7 +45,9 @@ import argparse
 import io
 import json
 import logging
+import os
 import sys
+import urllib.request
 import warnings
 from pathlib import Path
 
@@ -76,6 +78,32 @@ from pureforest_dataset import (
 
 warnings.filterwarnings("ignore", message=".*GDAL_NODATA.*")
 logging.getLogger("tifffile").setLevel(logging.ERROR)
+
+
+# ---------------------------------------------------------------------------
+# Helper notification ntfy/webhook : best-effort, jamais bloquant
+# ---------------------------------------------------------------------------
+
+def notify(subject: str, body: str | None = None) -> None:
+    """POST sur $NOTIFY_WEBHOOK si defini. Echec silencieux (timeout 5s).
+
+    Le webhook est suppose etre une URL ntfy.sh (la seule forme testee depuis
+    Python ici). Pour Slack/autre, le helper bash send_notification de
+    cloud_train_pureforest.sh reste la voie privilegiee.
+    """
+    url = os.environ.get("NOTIFY_WEBHOOK", "").strip()
+    if not url or "ntfy" not in url:
+        return
+    payload = (body or subject).encode("utf-8")
+    try:
+        req = urllib.request.Request(
+            url, data=payload,
+            headers={"Title": subject},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass  # ne jamais faire echouer le training a cause d'une notif
 
 
 # ---------------------------------------------------------------------------
@@ -493,6 +521,17 @@ def main() -> int:
                                   extra={"phase": "probe", "history": history})
                 print(f"    -> meilleur (bacc={v_bacc:.1f}%) sauvegarde")
 
+        # Notif fin probe : recap des N epochs
+        notify(
+            f"[MAESTRO] Probe termine ({args.probe_epochs} ep)",
+            f"Probe {args.probe_epochs} epochs termine.\n"
+            f"  Best val_bacc : {best_val_bacc:.1f}%\n"
+            f"  Best epoch    : {best_epoch}\n"
+            f"  Modalites     : {','.join(args.modalities)}\n\n"
+            f"Demarrage phase B : fine-tune complet "
+            f"({args.finetune_epochs} epochs max, patience {args.patience}).",
+        )
+
     # ------------------------------------------------------------------
     # Phase B : Fine-tune complet (encodeur degele, LR differentielle)
     # ------------------------------------------------------------------
@@ -540,6 +579,7 @@ def main() -> int:
                   f"acc={v_acc:.1f}% | bacc={v_bacc:.1f}% | f1={v_f1:.1f}%")
 
             if v_bacc > best_val_bacc:
+                gain = v_bacc - best_val_bacc
                 best_val_bacc = v_bacc
                 best_epoch    = epoch + args.probe_epochs
                 patience_counter = 0
@@ -549,10 +589,29 @@ def main() -> int:
                                   extra={"phase": "finetune",
                                             "history": history})
                 print(f"    -> meilleur (bacc={v_bacc:.1f}%) sauvegarde")
+                # Notif sur chaque nouveau best : permet de suivre la trajectoire
+                # (typiquement 4-8 notifs sur un run de 50 epochs).
+                notify(
+                    f"[MAESTRO] Best epoch {best_epoch} - bacc={v_bacc:.1f}%",
+                    f"Fine-tune epoch {epoch}/{args.finetune_epochs}\n"
+                    f"  val_bacc : {v_bacc:.1f}% (+{gain:.1f})\n"
+                    f"  val_acc  : {v_acc:.1f}%\n"
+                    f"  val_f1   : {v_f1:.1f}%\n"
+                    f"  val_loss : {v_loss:.4f}\n"
+                    f"  patience reset (etait {patience_counter})",
+                )
             else:
                 patience_counter += 1
                 if patience_counter >= args.patience:
                     print(f"  Early stopping (patience={args.patience})")
+                    notify(
+                        f"[MAESTRO] Early stopping epoch {epoch + args.probe_epochs}",
+                        f"Early stopping declenche.\n"
+                        f"  Patience  : {args.patience} epochs sans gain\n"
+                        f"  Epoch     : {epoch}/{args.finetune_epochs}\n"
+                        f"  Best bacc : {best_val_bacc:.1f}% (epoch {best_epoch})\n\n"
+                        f"Demarrage eval finale sur test.",
+                    )
                     break
 
     # ------------------------------------------------------------------
