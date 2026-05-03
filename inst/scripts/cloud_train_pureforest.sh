@@ -203,8 +203,13 @@ $PYTHON -m pip install --quiet --upgrade pip
 # Versions pinees au minor : reproductibilite tout en laissant les patchs de
 # securite passer. Une version trop stricte (==X.Y.Z) casse des qu'une release
 # est retiree de PyPI ; trop laxe (sans borne haute) laisse derive.
+#
+# torch < 2.11 : PyTorch 2.11 (sortie debut mai 2026) requiert CUDA 13.0 et
+# refuse les drivers NVIDIA <= 570.x (CUDA 12.8). Les images Scaleway GPU OS 12
+# embarquent le driver 570.211.x. Sans cette borne haute, pip tire 2.11 et
+# torch retombe silencieusement sur CPU (training inutilisable).
 $PYTHON -m pip install --quiet \
-    'torch>=2.5,<3' 'numpy>=1.26,<3' 'safetensors>=0.4,<1' \
+    'torch>=2.5,<2.11' 'numpy>=1.26,<3' 'safetensors>=0.4,<1' \
     'rasterio>=1.3,<2' 'tifffile>=2023.1' 'pillow>=10,<13' \
     'huggingface_hub>=0.20,<2' 'tqdm>=4.65,<5' \
     'laspy>=2.5,<3' 'lazrs>=0.5,<1' 'scipy>=1.10,<2'
@@ -304,7 +309,10 @@ echo "  Modalites        : $MODALITIES"
 echo
 
 mkdir -p "$OUTPUT_DIR"
-N_WORKERS=$(nproc 2>/dev/null || echo 4)
+# nproc --all : ignore les variables d'env OpenMP/cgroup. Sans --all, OMP_NUM_THREADS=1
+# fait retourner 1 a nproc, et le DataLoader se retrouve avec 1 worker (pipeline
+# I/O serialise -> GPU famelique).
+N_WORKERS=$(nproc --all 2>/dev/null || nproc 2>/dev/null || echo 4)
 # Saturer les vCPU disponibles : avec OMP_NUM_THREADS=1 chaque worker est
 # leger, on peut en lancer autant qu'il y a de vCPU sans contention.
 N_WORKERS=$((N_WORKERS > 8 ? 8 : N_WORKERS))
