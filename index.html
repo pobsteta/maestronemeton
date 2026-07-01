@@ -7,8 +7,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>maestronemeton — Reconnaissance des essences forestieres et occupation du sol • maestronemeton</title>
 <script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<link href="deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
-<script src="deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="deps/Inter-0.4.10/font.css" rel="stylesheet">
+<link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
+<script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/Inter-0.4.10/font.css" rel="stylesheet">
 <link href="deps/JetBrains_Mono-0.4.10/font.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="index.html">maestronemeton</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.2.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -216,92 +216,92 @@ outputs/
 <col width="43%">
 <col width="56%">
 </colgroup>
-<thead><tr class="header">
+<thead><tr>
 <th>Fonction</th>
 <th>Description</th>
 </tr></thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/maestro_pipeline.html">maestro_pipeline()</a></code></td>
 <td>Pipeline complet AOI -&gt; carte des essences</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/load_aoi.html">load_aoi()</a></code></td>
 <td>Charger un GeoPackage et reprojeter en Lambert-93</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/download_ortho_for_aoi.html">download_ortho_for_aoi()</a></code></td>
 <td>Telecharger ortho RVB + IRC depuis IGN</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/prepare_dem.html">prepare_dem()</a></code></td>
 <td>Preparer la modalite dem MAESTRO (DSM LiDAR HD + DTM RGE ALTI)</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/combine_rvb_irc.html">combine_rvb_irc()</a></code></td>
 <td>Combiner RVB + IRC en image 4 bandes RGBI (modalite aerial)</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/aligner_dem_sur_rgbi.html">aligner_dem_sur_rgbi()</a></code></td>
 <td>Reechantillonner le DEM 2 bandes sur la grille aerial</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/telecharger_modele.html">telecharger_modele()</a></code></td>
 <td>Telecharger le modele depuis Hugging Face</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/configurer_python.html">configurer_python()</a></code></td>
 <td>Configurer l’environnement Python</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/creer_grille_patches.html">creer_grille_patches()</a></code></td>
 <td>Creer la grille de patches pour l’inference</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/extraire_patches_raster.html">extraire_patches_raster()</a></code></td>
 <td>Extraire les valeurs des patches</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/executer_inference.html">executer_inference()</a></code></td>
 <td>Executer l’inference MAESTRO</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/assembler_resultats.html">assembler_resultats()</a></code></td>
 <td>Exporter les resultats en GeoPackage + CSV</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/creer_carte_raster.html">creer_carte_raster()</a></code></td>
 <td>Creer le raster de classification</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/essences_pureforest.html">essences_pureforest()</a></code></td>
 <td>Table des 13 classes PureForest</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/download_s2_for_aoi.html">download_s2_for_aoi()</a></code></td>
 <td>Telecharger Sentinel-2 (mono-date ou composite)</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/download_s1_for_aoi.html">download_s1_for_aoi()</a></code></td>
 <td>Telecharger Sentinel-1 (mono-date ou composite)</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/build_date_ranges.html">build_date_ranges()</a></code></td>
 <td>Construire les periodes multi-annuelles</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/calculer_composite_median.html">calculer_composite_median()</a></code></td>
 <td>Composite median pixel par pixel</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/aligner_sentinel.html">aligner_sentinel()</a></code></td>
 <td>Aligner un raster Sentinel sur la grille</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/ign_layer_name.html">ign_layer_name()</a></code></td>
 <td>Construire un nom de couche WMS IGN</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/validate_wms_data.html">validate_wms_data()</a></code></td>
 <td>Verifier la validite d’un raster WMS</td>
 </tr>
@@ -312,87 +312,87 @@ outputs/
 <h2 id="options-cli">Options CLI<a class="anchor" aria-label="anchor" href="#options-cli"></a>
 </h2>
 <table class="table">
-<thead><tr class="header">
+<thead><tr>
 <th>Option</th>
 <th>Description</th>
 <th>Defaut</th>
 </tr></thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>--aoi</code></td>
 <td>Fichier GeoPackage</td>
 <td><code>data/aoi.gpkg</code></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>--output</code></td>
 <td>Repertoire de sortie</td>
 <td><code>outputs/</code></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>--model</code></td>
 <td>Modele Hugging Face</td>
 <td><code>IGNF/MAESTRO_FLAIR-HUB_base</code></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>--millesime_ortho</code></td>
 <td>Annee ortho RVB</td>
 <td>
 <code>NULL</code> (plus recent)</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>--millesime_irc</code></td>
 <td>Annee ortho IRC</td>
 <td>
 <code>NULL</code> (plus recent)</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>--patch_size</code></td>
 <td>Taille patches (px)</td>
 <td><code>250</code></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>--resolution</code></td>
 <td>Resolution (m)</td>
 <td><code>0.2</code></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>--s2</code></td>
 <td>Inclure Sentinel-2</td>
 <td><code>FALSE</code></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>--s1</code></td>
 <td>Inclure Sentinel-1</td>
 <td><code>FALSE</code></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>--date_sentinel</code></td>
 <td>Date cible Sentinel</td>
 <td>
 <code>NULL</code> (ete)</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>--annees</code></td>
 <td>Annees composite (ex: <code>2022:2024</code>)</td>
 <td>
 <code>NULL</code> (mono-date)</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>--saison</code></td>
 <td>Saison composite</td>
 <td><code>ete</code></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>--max_scenes</code></td>
 <td>Max scenes/annee composite</td>
 <td><code>3</code></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>--gpu</code></td>
 <td>Utiliser CUDA</td>
 <td><code>FALSE</code></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>--token</code></td>
 <td>Token Hugging Face</td>
 <td><em>(env var)</em></td>
@@ -411,86 +411,86 @@ outputs/
 <col width="34%">
 <col width="18%">
 </colgroup>
-<thead><tr class="header">
+<thead><tr>
 <th>Code</th>
 <th>Essence</th>
 <th>Nom latin</th>
 <th>Type</th>
 </tr></thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>0</td>
 <td>Chene decidu</td>
 <td><em>Quercus robur, Q. petraea, Q. pubescens</em></td>
 <td>Feuillu</td>
 </tr>
-<tr class="even">
+<tr>
 <td>1</td>
 <td>Chene vert</td>
 <td><em>Quercus ilex</em></td>
 <td>Feuillu</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>2</td>
 <td>Hetre</td>
 <td><em>Fagus sylvatica</em></td>
 <td>Feuillu</td>
 </tr>
-<tr class="even">
+<tr>
 <td>3</td>
 <td>Chataignier</td>
 <td><em>Castanea sativa</em></td>
 <td>Feuillu</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>4</td>
 <td>Robinier</td>
 <td><em>Robinia pseudoacacia</em></td>
 <td>Feuillu</td>
 </tr>
-<tr class="even">
+<tr>
 <td>5</td>
 <td>Pin maritime</td>
 <td><em>Pinus pinaster</em></td>
 <td>Resineux</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>6</td>
 <td>Pin sylvestre</td>
 <td><em>Pinus sylvestris</em></td>
 <td>Resineux</td>
 </tr>
-<tr class="even">
+<tr>
 <td>7</td>
 <td>Pin noir</td>
 <td><em>Pinus nigra</em></td>
 <td>Resineux</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>8</td>
 <td>Pin d’Alep</td>
 <td><em>Pinus halepensis</em></td>
 <td>Resineux</td>
 </tr>
-<tr class="even">
+<tr>
 <td>9</td>
 <td>Sapin</td>
 <td><em>Abies alba</em></td>
 <td>Resineux</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>10</td>
 <td>Epicea</td>
 <td><em>Picea abies</em></td>
 <td>Resineux</td>
 </tr>
-<tr class="even">
+<tr>
 <td>11</td>
 <td>Meleze</td>
 <td><em>Larix decidua, L. kaempferi</em></td>
 <td>Resineux</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>12</td>
 <td>Douglas</td>
 <td><em>Pseudotsuga menziesii</em></td>
@@ -504,23 +504,23 @@ outputs/
 </h2>
 <p>Les donnees sont telechargees via le WMS-R de la Geoplateforme IGN :</p>
 <table class="table">
-<thead><tr class="header">
+<thead><tr>
 <th>Donnee</th>
 <th>Couche WMS</th>
 <th>Resolution</th>
 </tr></thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>Ortho RVB</td>
 <td><code>ORTHOIMAGERY.ORTHOPHOTOS[YYYY]</code></td>
 <td>0.2 m</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Ortho IRC</td>
 <td><code>ORTHOIMAGERY.ORTHOPHOTOS.IRC[.YYYY]</code></td>
 <td>0.2 m</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>MNT</td>
 <td><code>ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES</code></td>
 <td>1 m</td>
@@ -622,7 +622,7 @@ outputs/
 <h2 data-toc-skip>License</h2>
 <ul class="list-unstyled">
 <li><a href="LICENSE.html">Full license</a></li>
-<li><small><a href="https://opensource.org/licenses/mit-license.php" class="external-link">MIT</a> + file <a href="LICENSE-text.html">LICENSE</a></small></li>
+<li><small><a href="https://www.r-project.org/Licenses/GPL-3" class="external-link">GPL-3</a></small></li>
 </ul>
 </div>
 

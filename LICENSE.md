@@ -1,24 +1,27 @@
-# NA
+# License
 
-MIT License
+Copyright (C) 2025-2026 Pierre Obsteta
 
-Copyright (c) 2025 Pierre Obsteta
+`maestronemeton` is free software: you can redistribute it and/or modify
+it under the terms of the **GNU General Public License version 3** as
+published by the Free Software Foundation.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the
-“Software”), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+Public License for more details:
+<https://www.gnu.org/licenses/gpl-3.0.html>.
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+## Relicensing note (2026-07-01)
 
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+`maestronemeton` was previously distributed under the MIT license. It
+has been relicensed to **GPL-3** for consistency across the Néméton
+platform, which moved to GPL-3 after the core package `nemeton`
+(v0.110.0) adopted GPL-3 (transitive dependency on the GPL-3
+`biodivMapR`, spec 028).
+
+Note: this relicensing is a **deliberate platform-consistency choice**,
+not a legal obligation — `maestronemeton` does not import the `nemeton`
+core package (it is a standalone MAESTRO/FLAIR species & land-cover
+classifier whose raster outputs `nemeton` consumes as data, not as
+linked code). See ADR-015 in `nemetonplateform`.

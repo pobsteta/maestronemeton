@@ -8,6 +8,7 @@ CoSIA), publies sur Hugging Face par l’IGN.
 ## Installation
 
 ``` r
+
 # install.packages("remotes")
 remotes::install_github("pobsteta/maestronemeton")
 ```
@@ -15,6 +16,7 @@ remotes::install_github("pobsteta/maestronemeton")
 Cote Python (reticulate gere l’environnement) :
 
 ``` r
+
 maestronemeton::configurer_python()
 ```
 
@@ -29,6 +31,7 @@ L’AOI est un GeoPackage en Lambert-93 (`EPSG:2154`). Tout polygone
 fonctionne ; voir `inst/extdata/` du package pour un exemple jouet.
 
 ``` r
+
 library(maestronemeton)
 
 resultat <- maestro_pipeline(
@@ -50,6 +53,7 @@ modalite `dem` impose la modalite `aerial` car elle est extraite sur la
 meme grille.
 
 ``` r
+
 maestro_pipeline(
   aoi_path  = "data/aoi.gpkg",
   modalites = c("aerial", "dem")
@@ -65,6 +69,7 @@ rebascule sur DSM = DTM avec un warning ; passez
 ## Multimodal complet — aerial + DEM + Sentinel
 
 ``` r
+
 maestro_pipeline(
   aoi_path        = "data/aoi.gpkg",
   modalites       = c("aerial", "dem", "s2", "s1_asc", "s1_des"),
@@ -82,6 +87,7 @@ vecteur `c(mois_debut, mois_fin)`).
 Charger un checkpoint local plutot que le modele de base :
 
 ``` r
+
 maestro_pipeline(
   aoi_path   = "data/aoi.gpkg",
   checkpoint = "outputs/training/maestro_pureforest_best.pt"
@@ -96,6 +102,7 @@ Python](https://pobsteta.github.io/maestronemeton/articles/python-pipeline.md).
 ## Segmentation pixel-a-pixel (FLAIR)
 
 ``` r
+
 flair_pipeline(
   aoi_path     = "data/aoi.gpkg",
   model_id     = "IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet",

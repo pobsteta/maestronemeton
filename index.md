@@ -13,6 +13,7 @@ via le service WMS-R (pas de cle API necessaire).
 ## Installation
 
 ``` r
+
 # Depuis le depot Git
 devtools::install_github("pobsteta/maestronemeton")
 
@@ -33,6 +34,7 @@ pip install torch numpy safetensors
 ### En tant que package R
 
 ``` r
+
 library(maestronemeton)
 
 # Pipeline complet en une ligne
@@ -55,6 +57,7 @@ possible de calculer un **composite median** a partir de plusieurs
 annees et saisons :
 
 ``` r
+
 # Composite median sur 3 etes (2022-2024)
 maestro_pipeline("data/aoi.gpkg",
                   use_s2 = TRUE, use_s1 = TRUE,
@@ -161,49 +164,49 @@ Rscript inst/scripts/test_pipeline.R --millesime 2023
 
 ## Fonctions exportees
 
-| Fonction                                                                                                          | Description                                                    |
-|-------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------|
-| [`maestro_pipeline()`](https://pobsteta.github.io/maestronemeton/reference/maestro_pipeline.md)                   | Pipeline complet AOI -\> carte des essences                    |
-| [`load_aoi()`](https://pobsteta.github.io/maestronemeton/reference/load_aoi.md)                                   | Charger un GeoPackage et reprojeter en Lambert-93              |
-| [`download_ortho_for_aoi()`](https://pobsteta.github.io/maestronemeton/reference/download_ortho_for_aoi.md)       | Telecharger ortho RVB + IRC depuis IGN                         |
-| [`prepare_dem()`](https://pobsteta.github.io/maestronemeton/reference/prepare_dem.md)                             | Preparer la modalite dem MAESTRO (DSM LiDAR HD + DTM RGE ALTI) |
-| [`combine_rvb_irc()`](https://pobsteta.github.io/maestronemeton/reference/combine_rvb_irc.md)                     | Combiner RVB + IRC en image 4 bandes RGBI (modalite aerial)    |
-| [`aligner_dem_sur_rgbi()`](https://pobsteta.github.io/maestronemeton/reference/aligner_dem_sur_rgbi.md)           | Reechantillonner le DEM 2 bandes sur la grille aerial          |
-| [`telecharger_modele()`](https://pobsteta.github.io/maestronemeton/reference/telecharger_modele.md)               | Telecharger le modele depuis Hugging Face                      |
-| [`configurer_python()`](https://pobsteta.github.io/maestronemeton/reference/configurer_python.md)                 | Configurer l’environnement Python                              |
-| [`creer_grille_patches()`](https://pobsteta.github.io/maestronemeton/reference/creer_grille_patches.md)           | Creer la grille de patches pour l’inference                    |
-| [`extraire_patches_raster()`](https://pobsteta.github.io/maestronemeton/reference/extraire_patches_raster.md)     | Extraire les valeurs des patches                               |
-| [`executer_inference()`](https://pobsteta.github.io/maestronemeton/reference/executer_inference.md)               | Executer l’inference MAESTRO                                   |
-| [`assembler_resultats()`](https://pobsteta.github.io/maestronemeton/reference/assembler_resultats.md)             | Exporter les resultats en GeoPackage + CSV                     |
-| [`creer_carte_raster()`](https://pobsteta.github.io/maestronemeton/reference/creer_carte_raster.md)               | Creer le raster de classification                              |
-| [`essences_pureforest()`](https://pobsteta.github.io/maestronemeton/reference/essences_pureforest.md)             | Table des 13 classes PureForest                                |
-| [`download_s2_for_aoi()`](https://pobsteta.github.io/maestronemeton/reference/download_s2_for_aoi.md)             | Telecharger Sentinel-2 (mono-date ou composite)                |
-| [`download_s1_for_aoi()`](https://pobsteta.github.io/maestronemeton/reference/download_s1_for_aoi.md)             | Telecharger Sentinel-1 (mono-date ou composite)                |
-| [`build_date_ranges()`](https://pobsteta.github.io/maestronemeton/reference/build_date_ranges.md)                 | Construire les periodes multi-annuelles                        |
-| [`calculer_composite_median()`](https://pobsteta.github.io/maestronemeton/reference/calculer_composite_median.md) | Composite median pixel par pixel                               |
-| [`aligner_sentinel()`](https://pobsteta.github.io/maestronemeton/reference/aligner_sentinel.md)                   | Aligner un raster Sentinel sur la grille                       |
-| [`ign_layer_name()`](https://pobsteta.github.io/maestronemeton/reference/ign_layer_name.md)                       | Construire un nom de couche WMS IGN                            |
-| [`validate_wms_data()`](https://pobsteta.github.io/maestronemeton/reference/validate_wms_data.md)                 | Verifier la validite d’un raster WMS                           |
+| Fonction | Description |
+|----|----|
+| [`maestro_pipeline()`](https://pobsteta.github.io/maestronemeton/reference/maestro_pipeline.md) | Pipeline complet AOI -\> carte des essences |
+| [`load_aoi()`](https://pobsteta.github.io/maestronemeton/reference/load_aoi.md) | Charger un GeoPackage et reprojeter en Lambert-93 |
+| [`download_ortho_for_aoi()`](https://pobsteta.github.io/maestronemeton/reference/download_ortho_for_aoi.md) | Telecharger ortho RVB + IRC depuis IGN |
+| [`prepare_dem()`](https://pobsteta.github.io/maestronemeton/reference/prepare_dem.md) | Preparer la modalite dem MAESTRO (DSM LiDAR HD + DTM RGE ALTI) |
+| [`combine_rvb_irc()`](https://pobsteta.github.io/maestronemeton/reference/combine_rvb_irc.md) | Combiner RVB + IRC en image 4 bandes RGBI (modalite aerial) |
+| [`aligner_dem_sur_rgbi()`](https://pobsteta.github.io/maestronemeton/reference/aligner_dem_sur_rgbi.md) | Reechantillonner le DEM 2 bandes sur la grille aerial |
+| [`telecharger_modele()`](https://pobsteta.github.io/maestronemeton/reference/telecharger_modele.md) | Telecharger le modele depuis Hugging Face |
+| [`configurer_python()`](https://pobsteta.github.io/maestronemeton/reference/configurer_python.md) | Configurer l’environnement Python |
+| [`creer_grille_patches()`](https://pobsteta.github.io/maestronemeton/reference/creer_grille_patches.md) | Creer la grille de patches pour l’inference |
+| [`extraire_patches_raster()`](https://pobsteta.github.io/maestronemeton/reference/extraire_patches_raster.md) | Extraire les valeurs des patches |
+| [`executer_inference()`](https://pobsteta.github.io/maestronemeton/reference/executer_inference.md) | Executer l’inference MAESTRO |
+| [`assembler_resultats()`](https://pobsteta.github.io/maestronemeton/reference/assembler_resultats.md) | Exporter les resultats en GeoPackage + CSV |
+| [`creer_carte_raster()`](https://pobsteta.github.io/maestronemeton/reference/creer_carte_raster.md) | Creer le raster de classification |
+| [`essences_pureforest()`](https://pobsteta.github.io/maestronemeton/reference/essences_pureforest.md) | Table des 13 classes PureForest |
+| [`download_s2_for_aoi()`](https://pobsteta.github.io/maestronemeton/reference/download_s2_for_aoi.md) | Telecharger Sentinel-2 (mono-date ou composite) |
+| [`download_s1_for_aoi()`](https://pobsteta.github.io/maestronemeton/reference/download_s1_for_aoi.md) | Telecharger Sentinel-1 (mono-date ou composite) |
+| [`build_date_ranges()`](https://pobsteta.github.io/maestronemeton/reference/build_date_ranges.md) | Construire les periodes multi-annuelles |
+| [`calculer_composite_median()`](https://pobsteta.github.io/maestronemeton/reference/calculer_composite_median.md) | Composite median pixel par pixel |
+| [`aligner_sentinel()`](https://pobsteta.github.io/maestronemeton/reference/aligner_sentinel.md) | Aligner un raster Sentinel sur la grille |
+| [`ign_layer_name()`](https://pobsteta.github.io/maestronemeton/reference/ign_layer_name.md) | Construire un nom de couche WMS IGN |
+| [`validate_wms_data()`](https://pobsteta.github.io/maestronemeton/reference/validate_wms_data.md) | Verifier la validite d’un raster WMS |
 
 ## Options CLI
 
-| Option              | Description                        | Defaut                        |
-|---------------------|------------------------------------|-------------------------------|
-| `--aoi`             | Fichier GeoPackage                 | `data/aoi.gpkg`               |
-| `--output`          | Repertoire de sortie               | `outputs/`                    |
-| `--model`           | Modele Hugging Face                | `IGNF/MAESTRO_FLAIR-HUB_base` |
-| `--millesime_ortho` | Annee ortho RVB                    | `NULL` (plus recent)          |
-| `--millesime_irc`   | Annee ortho IRC                    | `NULL` (plus recent)          |
-| `--patch_size`      | Taille patches (px)                | `250`                         |
-| `--resolution`      | Resolution (m)                     | `0.2`                         |
-| `--s2`              | Inclure Sentinel-2                 | `FALSE`                       |
-| `--s1`              | Inclure Sentinel-1                 | `FALSE`                       |
-| `--date_sentinel`   | Date cible Sentinel                | `NULL` (ete)                  |
-| `--annees`          | Annees composite (ex: `2022:2024`) | `NULL` (mono-date)            |
-| `--saison`          | Saison composite                   | `ete`                         |
-| `--max_scenes`      | Max scenes/annee composite         | `3`                           |
-| `--gpu`             | Utiliser CUDA                      | `FALSE`                       |
-| `--token`           | Token Hugging Face                 | *(env var)*                   |
+| Option | Description | Defaut |
+|----|----|----|
+| `--aoi` | Fichier GeoPackage | `data/aoi.gpkg` |
+| `--output` | Repertoire de sortie | `outputs/` |
+| `--model` | Modele Hugging Face | `IGNF/MAESTRO_FLAIR-HUB_base` |
+| `--millesime_ortho` | Annee ortho RVB | `NULL` (plus recent) |
+| `--millesime_irc` | Annee ortho IRC | `NULL` (plus recent) |
+| `--patch_size` | Taille patches (px) | `250` |
+| `--resolution` | Resolution (m) | `0.2` |
+| `--s2` | Inclure Sentinel-2 | `FALSE` |
+| `--s1` | Inclure Sentinel-1 | `FALSE` |
+| `--date_sentinel` | Date cible Sentinel | `NULL` (ete) |
+| `--annees` | Annees composite (ex: `2022:2024`) | `NULL` (mono-date) |
+| `--saison` | Saison composite | `ete` |
+| `--max_scenes` | Max scenes/annee composite | `3` |
+| `--gpu` | Utiliser CUDA | `FALSE` |
+| `--token` | Token Hugging Face | *(env var)* |
 
 ## Essences detectees (13 classes PureForest)
 

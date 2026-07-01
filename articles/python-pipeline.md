@@ -161,6 +161,7 @@ Cote R, l’inference se fait via
 :
 
 ``` r
+
 maestro_segmentation_pipeline(
   aoi_path      = "data/aoi.gpkg",
   backbone_path = "models/MAESTRO_pretrain.ckpt",

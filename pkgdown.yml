@@ -1,10 +1,10 @@
-pandoc: 3.1.11
+pandoc: 3.8.3
 pkgdown: 2.2.0
 pkgdown_sha: ~
 articles:
   getting-started: getting-started.html
   python-pipeline: python-pipeline.html
-last_built: 2026-04-30T07:38Z
+last_built: 2026-07-01T18:21Z
 urls:
   reference: https://pobsteta.github.io/maestronemeton/reference
   article: https://pobsteta.github.io/maestronemeton/articles
