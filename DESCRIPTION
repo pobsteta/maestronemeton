@@ -1,6 +1,6 @@
 Package: maestronemeton
 Title: Forest Species and Land Cover Classification Using MAESTRO and FLAIR Models
-Version: 0.2.1
+Version: 0.3.0
 Authors@R:
     person("Pierre", "Obsteta", role = c("aut", "cre"),
            email = "pierre.obsteta@example.com")
@@ -15,7 +15,7 @@ Description: Automatic recognition of forest tree species (13 PureForest classes
     semantic segmentation using UNet/UPerNet architectures with Hann window
     blending. Includes spectral indices (NDVI, GNDVI, SAVI) and evaluation
     metrics (mIoU).
-License: MIT + file LICENSE
+License: GPL-3
 URL: https://pobsteta.github.io/maestronemeton/, https://github.com/pobsteta/maestronemeton
 BugReports: https://github.com/pobsteta/maestronemeton/issues
 Encoding: UTF-8
